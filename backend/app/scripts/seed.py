@@ -1,8 +1,13 @@
-from app.database import SessionLocal
+from app.database import SessionLocal, engine, Base
 from app.models.product import Product
 
 
 def seed_data():
+    # Create tables
+    print("Creating tables...")
+    Base.metadata.create_all(bind=engine)
+    print("Tables created.")
+
     db = SessionLocal()
     try:
         # Check if there is already data

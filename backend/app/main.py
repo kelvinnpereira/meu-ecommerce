@@ -7,10 +7,6 @@ from app.database import Base, engine
 app = FastAPI(title="Meu E-commerce API")
 
 
-@app.on_event("startup")
-def on_startup():
-    Base.metadata.create_all(bind=engine)
-
 
 # CORS
 origins = [
