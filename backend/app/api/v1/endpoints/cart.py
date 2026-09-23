@@ -1,160 +1,170 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.deps import get_db
-from app.schemas.cart import CartRead, CartItemCreate, CartItemUpdate
+from app.api import deps
+from app.schemas.cart import CartItemCreate, CartItemUpdate, CartRead
+from app.schemas.coupon import CouponApply
 from app.services.cart_service import (
-    CartService,
     CartEmptyError,
     CartItemNotFoundError,
+    CartService,
     InsufficientStockError,
     InvalidTransitionError,
     ProductNotFoundError,
 )
-from app.services.coupon_service import (
-    CouponAlreadyUsedError,
-    CouponExpiredError,
-    InvalidCouponError,
-)
+from app.services.coupon_service import InvalidCouponError
 
 router = APIRouter()
 
-# This is a simplification for the example.
-# In a real app, you'd get the user_id from a proper authentication system.
-USER_ID = "user_123"
-
 
 @router.get("/", response_model=CartRead)
-def get_cart(db: Session = Depends(get_db)):
+def read_cart(
+    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
+):
     """
-    T-005: Retrieve the current user's cart.
+    Retrieve the user's current cart.
     """
-    cart_service = CartService(db)
-    cart = cart_service.get_or_create_cart(USER_ID)
-    return cart
+    return cart_service.get_or_create_cart(user_id=user_id)
 
 
 @router.post("/items", response_model=CartRead)
-def add_item_to_cart(item: CartItemCreate, db: Session = Depends(get_db)):
+def add_item_to_cart(
+    item_data: CartItemCreate,
+    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
+):
     """
-    T-006: Add an item to the cart.
+    Add an item to the cart.
     """
     try:
-        cart_service = CartService(db)
-        cart = cart_service.add_item(
-            user_id=USER_ID, product_id=item.product_id, quantity=item.quantity
+        return cart_service.add_item(
+            user_id=user_id,
+            product_id=item_data.product_id,
+            quantity=item_data.quantity,
         )
-        return cart
     except (InsufficientStockError, ProductNotFoundError) as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e))
+    except InvalidTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @router.put("/items/{product_id}", response_model=CartRead)
-def update_cart_item(
-    product_id: str, item: CartItemUpdate, db: Session = Depends(get_db)
+def update_cart_item_quantity(
+    product_id: str,
+    item_data: CartItemUpdate,
+    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
 ):
     """
-    T-007: Update an item's quantity in the cart.
+    Update the quantity of an item in the cart. If quantity is 0, the item is removed.
     """
     try:
-        cart_service = CartService(db)
-        cart = cart_service.update_item(
-            user_id=USER_ID, product_id=product_id, quantity=item.quantity
+        return cart_service.update_item(
+            user_id=user_id, product_id=product_id, quantity=item_data.quantity
         )
-        return cart
-    except (InsufficientStockError, ProductNotFoundError, CartItemNotFoundError) as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except (InsufficientStockError, ProductNotFoundError) as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except CartItemNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except InvalidTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @router.delete("/items/{product_id}", response_model=CartRead)
-def remove_item_from_cart(product_id: str, db: Session = Depends(get_db)):
+def remove_item_from_cart(
+    product_id: str,
+    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
+):
     """
-    T-007: Remove an item from the cart.
+    Remove an item from the cart.
     """
     try:
-        cart_service = CartService(db)
-        cart = cart_service.remove_item(user_id=USER_ID, product_id=product_id)
-        return cart
+        return cart_service.remove_item(user_id=user_id, product_id=product_id)
     except CartItemNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e))
+    except InvalidTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.post("/coupon/{coupon_code}", response_model=CartRead)
-def apply_coupon_to_cart(coupon_code: str, db: Session = Depends(get_db)):
+@router.post("/coupon", response_model=CartRead)
+def apply_coupon_to_cart(
+    coupon_data: CouponApply,
+    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
+):
     """
-    T-010: Apply a coupon to the cart.
+    Apply a coupon to the cart.
     """
     try:
-        cart_service = CartService(db)
-        cart = cart_service.apply_coupon(user_id=USER_ID, coupon_code=coupon_code)
-        return cart
-    except (
-        CartEmptyError,
-        CouponAlreadyUsedError,
-        CouponExpiredError,
-        InvalidCouponError,
-    ) as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        return cart_service.apply_coupon(
+            user_id=user_id, coupon_code=coupon_data.coupon_code
+        )
+    except (InvalidCouponError, CartEmptyError) as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except InvalidTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @router.delete("/coupon", response_model=CartRead)
-def remove_coupon_from_cart(db: Session = Depends(get_db)):
+def remove_coupon_from_cart(
+    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
+):
     """
-    T-010: Remove the coupon from the cart.
+    Remove the coupon from the cart.
     """
-    cart_service = CartService(db)
-    cart = cart_service.remove_coupon(user_id=USER_ID)
-    return cart
+    try:
+        return cart_service.remove_coupon(user_id=user_id)
+    except InvalidTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @router.post("/checkout", response_model=CartRead)
-def start_checkout(db: Session = Depends(get_db)):
+def start_checkout(
+    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
+):
     """
-    T-011: Start the checkout process.
-    """
-    try:
-        cart_service = CartService(db)
-        cart = cart_service.start_checkout(user_id=USER_ID)
-        return cart
-    except (CartEmptyError, InvalidTransitionError) as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.post("/return-to-cart", response_model=CartRead)
-def return_to_cart(db: Session = Depends(get_db)):
-    """
-    T-011: Return from checkout to continue shopping.
+    Move the cart to the 'IN_CHECKOUT' state.
     """
     try:
-        cart_service = CartService(db)
-        cart = cart_service.return_to_cart(user_id=USER_ID)
-        return cart
+        return cart_service.start_checkout(user_id=user_id)
+    except CartEmptyError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except InvalidTransitionError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.post("/confirm", response_model=CartRead)
-def confirm_order(db: Session = Depends(get_db)):
+@router.delete("/checkout", response_model=CartRead)
+def return_to_editing(
+    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
+):
     """
-    T-012: Confirm the order.
+    Return the cart from 'IN_CHECKOUT' to 'WITH_ITEMS' state.
     """
     try:
-        cart_service = CartService(db)
-        cart = cart_service.confirm_order(user_id=USER_ID)
-        return cart
-    except (
-        CartEmptyError,
-        InvalidTransitionError,
-        InsufficientStockError,
-        InvalidCouponError,
-    ) as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred during order confirmation.",
-        )
+        return cart_service.return_to_cart(user_id=user_id)
+    except InvalidTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.post("/confirm")
+def confirm_order(
+    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
+):
+    """
+    Confirm the order, creating an order and decrementing stock.
+    """
+    try:
+        confirmed_cart = cart_service.confirm_order(user_id=user_id)
+        return {
+            "message": "Order confirmed successfully!",
+            "cart_status": confirmed_cart.status.value,
+        }
+    except (InsufficientStockError, CartEmptyError, InvalidCouponError) as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except InvalidTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))

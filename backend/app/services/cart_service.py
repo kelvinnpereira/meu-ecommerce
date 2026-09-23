@@ -1,7 +1,8 @@
-from sqlalchemy.orm import Session, object_session
+from typing import ClassVar, Dict, List
+
+from sqlalchemy.orm import Session
 
 from app.models.cart import Cart, CartItem, CartStatusEnum
-from app.models.coupon import Coupon
 from app.repositories.cart_repository import CartRepository
 from app.repositories.coupon_repository import CouponRepository
 from app.services.coupon_service import CouponService, InvalidCouponError
@@ -40,11 +41,13 @@ class InvalidTransitionError(Exception):
     def __init__(self, from_state: CartStatusEnum, to_state: CartStatusEnum):
         self.from_state = from_state
         self.to_state = to_state
-        super().__init__(f"Invalid transition from state '{from_state.value}' to '{to_state.value}'.")
+        super().__init__(
+            f"Invalid transition from state '{from_state.value}' to '{to_state.value}'."
+        )
 
 
 class CartService:
-    _TRANSITIONS = {
+    _TRANSITIONS: ClassVar[Dict[CartStatusEnum, List[CartStatusEnum]]] = {
         CartStatusEnum.EMPTY: [CartStatusEnum.WITH_ITEMS, CartStatusEnum.ABANDONED],
         CartStatusEnum.WITH_ITEMS: [
             CartStatusEnum.EMPTY,
@@ -143,7 +146,7 @@ class CartService:
 
         cart = self.get_or_create_cart(user_id)
         if cart.status in [CartStatusEnum.ORDER_CREATED, CartStatusEnum.IN_CHECKOUT]:
-             raise InvalidTransitionError(cart.status, cart.status)
+            raise InvalidTransitionError(cart.status, cart.status)
 
         item_in_cart = next(
             (item for item in cart.items if item.product_id == product_id), None
@@ -264,7 +267,9 @@ class CartService:
         try:
             # Lock products and check stock
             for item in cart.items:
-                product = self.product_service.get_product_by_id_for_update(int(item.product_id))
+                product = self.product_service.get_product_by_id_for_update(
+                    int(item.product_id)
+                )
                 if product.stock < item.quantity:
                     raise InsufficientStockError(
                         item.product_id, item.quantity, product.stock
@@ -290,9 +295,9 @@ class CartService:
 
             self.db.commit()
 
-        except (InsufficientStockError, InvalidCouponError) as e:
+        except (InsufficientStockError, InvalidCouponError):
             self.db.rollback()
-            raise e
+            raise
         except Exception:
             self.db.rollback()
             raise
