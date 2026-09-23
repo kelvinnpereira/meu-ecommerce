@@ -6,10 +6,14 @@ from sqlalchemy.orm import Session
 from app.models.cart import CartStatusEnum
 from app.models.coupon import Coupon, CouponDiscountType
 from app.models.product import Product
-from app.services.cart_service import CartEmptyError, CartService
+from app.services.cart_service import (
+    CartEmptyError,
+    CartService,
+    InvalidTransitionError,
+)
 from app.services.coupon_service import (
     CouponExpiredError,
-    CouponInvalidError,
+    InvalidCouponError,
 )
 
 
@@ -34,6 +38,116 @@ def sample_product(db_session: Session) -> Product:
     db_session.commit()
     db_session.refresh(product)
     return product
+
+
+# --- State Machine Tests ---
+
+
+def test_cart_initial_state(cart_service: CartService):
+    user_id = "user_initial_state"
+    cart = cart_service.get_or_create_cart(user_id)
+    assert cart.status == CartStatusEnum.EMPTY
+
+
+def test_transition_empty_to_with_items(
+    cart_service: CartService, sample_product: Product
+):
+    user_id = "user_empty_to_with_items"
+    cart = cart_service.add_item(user_id, str(sample_product.id), 1)
+    assert cart.status == CartStatusEnum.WITH_ITEMS
+
+
+def test_transition_with_items_to_empty(
+    cart_service: CartService, sample_product: Product
+):
+    user_id = "user_with_items_to_empty"
+    cart_service.add_item(user_id, str(sample_product.id), 1)
+    cart = cart_service.remove_item(user_id, str(sample_product.id))
+    assert cart.status == CartStatusEnum.EMPTY
+
+
+def test_transition_with_items_to_checkout(
+    cart_service: CartService, sample_product: Product
+):
+    user_id = "user_with_items_to_checkout"
+    cart_service.add_item(user_id, str(sample_product.id), 1)
+    cart = cart_service.start_checkout(user_id)
+    assert cart.status == CartStatusEnum.IN_CHECKOUT
+
+
+def test_transition_checkout_to_with_items(
+    cart_service: CartService, sample_product: Product
+):
+    user_id = "user_checkout_to_with_items"
+    cart_service.add_item(user_id, str(sample_product.id), 1)
+    cart_service.start_checkout(user_id)
+    cart = cart_service.return_to_cart(user_id)
+    assert cart.status == CartStatusEnum.WITH_ITEMS
+
+
+def test_transition_checkout_to_order_created(
+    cart_service: CartService, sample_product: Product
+):
+    user_id = "user_checkout_to_order_created"
+    cart_service.add_item(user_id, str(sample_product.id), 1)
+    cart_service.start_checkout(user_id)
+    cart = cart_service.confirm_order(user_id)
+    assert cart.status == CartStatusEnum.ORDER_CREATED
+
+
+@pytest.mark.parametrize(
+    "initial_state_actions, invalid_action, expected_error",
+    [
+        (
+            [],  # EMPTY
+            lambda service, uid: service.start_checkout(uid),
+            CartEmptyError,
+        ),
+        (
+            [lambda service, uid, pid: service.add_item(uid, pid, 1)],  # WITH_ITEMS
+            lambda service, uid: service.confirm_order(uid),
+            InvalidTransitionError,
+        ),
+        (
+            [
+                lambda service, uid, pid: service.add_item(uid, pid, 1),
+                lambda service, uid, pid: service.start_checkout(uid),
+                lambda service, uid, pid: service.confirm_order(uid),
+            ],  # ORDER_CREATED
+            lambda service, uid: service.start_checkout(uid),
+            InvalidTransitionError,
+        ),
+        (
+            [
+                lambda service, uid, pid: service.add_item(uid, pid, 1),
+                lambda service, uid, pid: service.start_checkout(uid),
+                lambda service, uid, pid: service.confirm_order(uid),
+            ],  # ORDER_CREATED
+            lambda service, uid: service.add_item(uid, "99", 1),
+            InvalidTransitionError,
+        ),
+    ],
+)
+def test_invalid_transitions(
+    cart_service: CartService,
+    sample_product: Product,
+    initial_state_actions,
+    invalid_action,
+    expected_error,
+):
+    user_id = "user_invalid_transition"
+    product_id = str(sample_product.id)
+
+    # Setup state
+    for action in initial_state_actions:
+        action(cart_service, user_id, product_id)
+
+    # Perform invalid action
+    with pytest.raises(expected_error):
+        invalid_action(cart_service, user_id)
+
+
+# --- Existing Coupon Tests ---
 
 
 def test_apply_valid_percentage_coupon(
@@ -84,7 +198,7 @@ def test_apply_invalid_coupon(cart_service: CartService, sample_product: Product
     user_id = "user_test_invalid"
     cart_service.add_item(user_id, product_id=str(sample_product.id), quantity=1)
 
-    with pytest.raises(CouponInvalidError):
+    with pytest.raises(InvalidCouponError):
         cart_service.apply_coupon(user_id, "NONEXISTENT")
 
 

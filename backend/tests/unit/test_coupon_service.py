@@ -7,7 +7,7 @@ from app.models.coupon import Coupon, CouponDiscountType
 from app.services.coupon_service import (
     CouponAlreadyUsedError,
     CouponExpiredError,
-    CouponInvalidError,
+    InvalidCouponError,
     CouponService,
 )
 
@@ -54,7 +54,7 @@ def test_validate_coupon_not_found(coupon_service, mock_coupon_repository):
     mock_coupon_repository.get_by_code.return_value = None
 
     # Act & Assert
-    with pytest.raises(CouponInvalidError, match="Coupon does not exist."):
+    with pytest.raises(InvalidCouponError, match="Coupon does not exist."):
         coupon_service.validate_coupon(code="INEXISTENTE", user_id="user123")
 
     mock_coupon_repository.get_by_code.assert_called_once_with("INEXISTENTE")

@@ -28,6 +28,10 @@ class CartItemCreate(CartItemBase):
     pass
 
 
+class CartItemUpdate(BaseModel):
+    quantity: int = Field(..., ge=0)
+
+
 class CartItemRead(CartItemBase):
     id: int
     unit_price: Decimal

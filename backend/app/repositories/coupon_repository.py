@@ -36,3 +36,12 @@ class CouponRepository:
         self.db.commit()
         self.db.refresh(db_coupon)
         return db_coupon
+
+    def create_usage(
+        self, user_id: str, coupon_id: int, order_id: str
+    ) -> UserCouponUsage:
+        db_usage = UserCouponUsage(
+            user_id=user_id, coupon_id=coupon_id, order_id=order_id
+        )
+        self.db.add(db_usage)
+        return db_usage
