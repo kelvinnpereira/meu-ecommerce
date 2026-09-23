@@ -1,7 +1,9 @@
-from sqlalchemy.orm import Session
-from app.repositories.product_repository import ProductRepository
-from app.models.product import Product
 from typing import List
+
+from sqlalchemy.orm import Session
+
+from app.models.product import Product
+from app.repositories.product_repository import ProductRepository
 
 
 class ProductService:

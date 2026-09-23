@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import os
 from collections.abc import Generator
 
@@ -6,21 +7,28 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # Set the database url BEFORE importing the app
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
+import app.database as app_db
 from app.api import deps
 from app.database import Base
 from app.main import app
 
-# Use an in-memory SQLite database for testing
+# Use an in-memory SQLite database for testing with StaticPool so all connections share the same memory
 SQLALCHEMY_DATABASE_URL = os.environ["DATABASE_URL"]
 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+app_db.engine = engine
+app_db.SessionLocal = TestingSessionLocal
 
 
 # This is the dependency that will be overridden for tests
@@ -44,21 +52,23 @@ def setup_test_db():
     Base.metadata.drop_all(bind=engine)
 
 
+@pytest.fixture(scope="function", autouse=True)
+def clean_db():
+    """Cleans all tables after each test to guarantee total isolation."""
+    yield
+    with engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            conn.execute(table.delete())
+
+
 @pytest.fixture(scope="function")
 def db_session() -> Generator[Session, None, None]:
-    """
-    Fixture that creates a new database session with a transaction for each test case.
-    The transaction is rolled back after the test, ensuring test isolation.
-    """
-    connection = engine.connect()
-    transaction = connection.begin()
-    db = Session(bind=connection)
+    """Provides a fresh database session for each test."""
+    db = TestingSessionLocal()
     try:
         yield db
     finally:
         db.close()
-        transaction.rollback()
-        connection.close()
 
 
 @pytest.fixture(scope="function")
@@ -74,5 +84,4 @@ def client(db_session: Session) -> TestClient:
     app.dependency_overrides[deps.get_db] = get_db_override
     with TestClient(app) as test_client:
         yield test_client
-    # remove dependency override after test
-    app.dependency_overrides.pop(deps.get_db)
+    app.dependency_overrides[deps.get_db] = override_get_db

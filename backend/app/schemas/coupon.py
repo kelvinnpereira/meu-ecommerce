@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import List
 import datetime
+
+from pydantic import BaseModel
+
 
 # Coupon Schemas
 class CouponBase(BaseModel):
@@ -8,8 +9,10 @@ class CouponBase(BaseModel):
     discount_type: str
     value: float
 
+
 class CouponCreate(CouponBase):
     expires_at: datetime.datetime
+
 
 class CouponRead(CouponBase):
     id: int
@@ -17,6 +20,7 @@ class CouponRead(CouponBase):
 
     class Config:
         orm_mode = True
+
 
 class CouponApply(BaseModel):
     coupon_code: str

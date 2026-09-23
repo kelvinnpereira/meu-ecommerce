@@ -1,8 +1,11 @@
 import enum
-from sqlalchemy import Column, Integer, String, Enum, Numeric, DateTime, ForeignKey
-from sqlalchemy.sql import func
+
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+
 from app.database import Base
+
 
 class CartStatusEnum(str, enum.Enum):
     EMPTY = "EMPTY"
@@ -11,6 +14,7 @@ class CartStatusEnum(str, enum.Enum):
     ORDER_CREATED = "ORDER_CREATED"
     ABANDONED = "ABANDONED"
 
+
 class Cart(Base):
     __tablename__ = "carts"
 
@@ -18,12 +22,15 @@ class Cart(Base):
     user_id = Column(String, unique=True, index=True, nullable=False)
     status = Column(Enum(CartStatusEnum), default=CartStatusEnum.EMPTY, nullable=False)
     coupon_id = Column(Integer, ForeignKey("coupons.id"), nullable=True)
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    items = relationship("CartItem", back_populates="cart", cascade="all, delete-orphan")
+    items = relationship(
+        "CartItem", back_populates="cart", cascade="all, delete-orphan"
+    )
     coupon = relationship("Coupon")
+
 
 class CartItem(Base):
     __tablename__ = "cart_items"

@@ -3,12 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.endpoints import health, products
 from app.database import Base, engine
-from app.models import product, cart, coupon # Importa os módulos dos modelos
+from app.models import cart, coupon, product  # noqa: F401
 
-Base.metadata.create_all(bind=engine) # Cria as tabelas
+Base.metadata.create_all(bind=engine)  # Cria as tabelas
 
 app = FastAPI(title="Meu E-commerce API")
-
 
 
 # CORS

@@ -1,14 +1,22 @@
-from sqlalchemy.orm import Session
+from typing import Optional
+
+from sqlalchemy.orm import Session, joinedload
+
 from app.models.cart import Cart, CartItem
 from app.schemas.cart import CartItemCreate
-from sqlalchemy.orm import joinedload
+
 
 class CartRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_user_id(self, user_id: str) -> Cart | None:
-        return self.db.query(Cart).options(joinedload(Cart.items)).filter(Cart.user_id == user_id).first()
+    def get_by_user_id(self, user_id: str) -> Optional[Cart]:
+        return (
+            self.db.query(Cart)
+            .options(joinedload(Cart.items), joinedload(Cart.coupon))
+            .filter(Cart.user_id == user_id)
+            .first()
+        )
 
     def create(self, user_id: str) -> Cart:
         db_cart = Cart(user_id=user_id)
@@ -24,4 +32,3 @@ class CartRepository:
         self.db.commit()
         self.db.refresh(cart)
         return cart
-
