@@ -9,3 +9,6 @@ class ProductRepository:
 
     def list_all(self) -> List[Product]:
         return self.db.query(Product).all()
+
+    def get_by_id(self, product_id: int) -> Product | None:
+        return self.db.query(Product).filter(Product.id == product_id).first()
