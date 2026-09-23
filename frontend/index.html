@@ -13,9 +13,45 @@
     <main>
         <div id="loading-indicator">Carregando...</div>
         <div id="products-container" class="hidden"></div>
+
+        <section id="cart-section" class="hidden">
+            <h2>Meu Carrinho</h2>
+            <div id="cart-container">
+                <table class="cart-table">
+                    <thead>
+                        <tr>
+                            <th>Produto</th>
+                            <th>Preço</th>
+                            <th>Quantidade</th>
+                            <th>Subtotal</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cart-items-body">
+                        <!-- Itens do carrinho serão inseridos aqui pelo JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="cart-summary">
+                <div class="coupon-form">
+                    <input type="text" id="coupon-code" placeholder="Código do Cupom">
+                    <button id="apply-coupon-btn">Aplicar</button>
+                    <button id="remove-coupon-btn" class="hidden">Remover Cupom</button>
+                </div>
+                <div class="cart-totals">
+                    <p>Subtotal: <span id="cart-subtotal">R$ 0,00</span></p>
+                    <p>Desconto: <span id="cart-discount">R$ 0,00</span></p>
+                    <h3>Total: <span id="cart-total">R$ 0,00</span></h3>
+                </div>
+                <button id="checkout-btn">Finalizar Compra</button>
+            </div>
+        </section>
     </main>
     <script src="js/api/productsApi.js"></script>
     <script src="js/views/productView.js"></script>
+    <script type="module" src="js/api/cartApi.js"></script>
+    <script type="module" src="js/views/cartView.js"></script>
+    <script type="module" src="js/domain/cart.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
