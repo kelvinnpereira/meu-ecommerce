@@ -1,3 +1,5 @@
+import re
+
 from playwright.sync_api import Page, expect
 
 
@@ -28,11 +30,13 @@ def test_product_listing_e2e(page: Page):
     # Check that all seeded products are rendered on the page
     for product_name in seeded_products:
         product_card = products_container.locator(
-            f".product-card:has-text('{product_name}')"
+            f".product:has-text('{product_name}')"
         )
         expect(product_card).to_be_visible()
         print(f"Found product: {product_name}")
 
     # Optional: Check a specific detail for one product
-    laptop_card = products_container.locator(".product-card:has-text('Laptop Moderno')")
-    expect(laptop_card.locator("p:has-text('Preço: R$ 4500.00')")).to_be_visible()
+    laptop_card = products_container.locator(".product:has-text('Laptop Moderno')")
+    expect(
+        laptop_card.locator("p", has_text=re.compile(r"Preço:\s*R\$\s*4500\.00"))
+    ).to_be_visible()

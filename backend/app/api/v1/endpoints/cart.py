@@ -18,7 +18,7 @@ router = APIRouter()
 
 @router.get("/", response_model=CartRead)
 def read_cart(
-    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    user_id: str = Depends(deps.get_user_id),
     cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
 ):
     """
@@ -30,7 +30,7 @@ def read_cart(
 @router.post("/items", response_model=CartRead)
 def add_item_to_cart(
     item_data: CartItemCreate,
-    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    user_id: str = Depends(deps.get_user_id),
     cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
 ):
     """
@@ -52,7 +52,7 @@ def add_item_to_cart(
 def update_cart_item_quantity(
     product_id: str,
     item_data: CartItemUpdate,
-    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    user_id: str = Depends(deps.get_user_id),
     cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
 ):
     """
@@ -73,7 +73,7 @@ def update_cart_item_quantity(
 @router.delete("/items/{product_id}", response_model=CartRead)
 def remove_item_from_cart(
     product_id: str,
-    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    user_id: str = Depends(deps.get_user_id),
     cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
 ):
     """
@@ -90,7 +90,7 @@ def remove_item_from_cart(
 @router.post("/coupon", response_model=CartRead)
 def apply_coupon_to_cart(
     coupon_data: CouponApply,
-    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    user_id: str = Depends(deps.get_user_id),
     cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
 ):
     """
@@ -108,7 +108,7 @@ def apply_coupon_to_cart(
 
 @router.delete("/coupon", response_model=CartRead)
 def remove_coupon_from_cart(
-    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    user_id: str = Depends(deps.get_user_id),
     cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
 ):
     """
@@ -122,7 +122,7 @@ def remove_coupon_from_cart(
 
 @router.post("/checkout", response_model=CartRead)
 def start_checkout(
-    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    user_id: str = Depends(deps.get_user_id),
     cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
 ):
     """
@@ -138,7 +138,7 @@ def start_checkout(
 
 @router.delete("/checkout", response_model=CartRead)
 def return_to_editing(
-    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    user_id: str = Depends(deps.get_user_id),
     cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
 ):
     """
@@ -152,7 +152,7 @@ def return_to_editing(
 
 @router.post("/confirm")
 def confirm_order(
-    user_id: str = Depends(deps.get_user_id),  # noqa: B008
+    user_id: str = Depends(deps.get_user_id),
     cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
 ):
     """

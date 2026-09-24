@@ -32,7 +32,7 @@ def seed_data(db=None):
                 Product(
                     name="Mouse Sem Fio Ergonômico",
                     description="Conexão Bluetooth e 2.4GHz",
-                    price=150.75,
+                    price=150.00,
                     stock=50,
                 ),
                 Product(
@@ -54,6 +54,12 @@ def seed_data(db=None):
             coupons = [
                 Coupon(
                     code="10OFF",
+                    discount_type=CouponDiscountType.PERCENTAGE,
+                    value=10.0,  # 10%
+                    expires_at=utc_now() + timedelta(days=30),
+                ),
+                Coupon(
+                    code="SALE10",
                     discount_type=CouponDiscountType.PERCENTAGE,
                     value=10.0,  # 10%
                     expires_at=utc_now() + timedelta(days=30),

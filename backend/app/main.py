@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.endpoints import cart, health, products
 from app.database import Base, engine
-from app.models import cart as cart_model, coupon, product  # noqa: F401
+from app.models import cart as cart_model  # noqa: F401
 
 Base.metadata.create_all(bind=engine)  # Cria as tabelas
 
@@ -15,6 +15,7 @@ origins = [
     "http://localhost",
     "http://localhost:8080",
     "http://127.0.0.1:5500",  # For Live Server
+    "http://frontend",
 ]
 
 app.add_middleware(

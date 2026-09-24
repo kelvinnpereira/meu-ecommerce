@@ -1,136 +1,165 @@
+/* General Body & Layout */
 body {
-    font-family: sans-serif;
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
     margin: 0;
+    padding: 0;
     background-color: #f4f4f4;
+    color: #333;
+}
+
+.container {
+    display: flex;
+    max-width: 1400px;
+    margin: auto;
+    overflow: hidden;
+    padding: 0 20px;
 }
 
 header {
-    background-color: #333;
-    color: white;
-    padding: 1rem;
+    background: #333;
+    color: #fff;
+    padding: 1rem 0;
     text-align: center;
 }
 
 main {
-    padding: 1rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
+    flex: 3;
+    padding-right: 20px;
 }
 
+/* Products */
 #products-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 1rem;
-    width: 100%;
-    max-width: 1200px;
+    gap: 20px;
+    padding: 20px 0;
 }
 
-.product-card {
-    background-color: white;
+.product {
+    background: #fff;
     border: 1px solid #ddd;
-    border-radius: 5px;
-    padding: 1rem;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 20px;
+    text-align: center;
 }
 
-.product-card h2 {
-    margin-top: 0;
+.product img {
+    max-width: 100%;
+    height: auto;
+    margin-bottom: 10px;
 }
 
-.hidden {
-    display: none;
+.product h3 {
+    margin: 10px 0;
 }
 
-/* Cart Section Styles */
-#cart-section {
-    width: 100%;
-    max-width: 1200px;
-    margin-top: 2rem;
-    background-color: white;
-    padding: 1rem;
-    border-radius: 5px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.product .price {
+    color: #0056b3;
+    font-weight: bold;
+    font-size: 1.2em;
+}
+
+.add-to-cart-btn {
+    background: #0056b3;
+    color: #fff;
+    border: 0;
+    padding: 10px 15px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.add-to-cart-btn:hover {
+    background: #004494;
+}
+
+/* Cart Sidebar */
+.cart-sidebar {
+    flex: 1;
+    background: #fff;
+    padding: 20px;
+    border-left: 1px solid #ddd;
+    margin-top: 20px;
 }
 
 #cart-section h2 {
     margin-top: 0;
-    border-bottom: 2px solid #f4f4f4;
-    padding-bottom: 0.5rem;
-    margin-bottom: 1rem;
+    text-align: center;
 }
 
-.cart-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 1rem;
+.cart-item {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
 }
 
-.cart-table th, .cart-table td {
-    border: 1px solid #ddd;
-    padding: 0.75rem;
-    text-align: left;
+.cart-item .item-info {
+    margin-bottom: 5px;
 }
 
-.cart-table th {
-    background-color: #f9f9f9;
+.cart-item .item-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
-.cart-table td input[type="number"] {
-    width: 60px;
+.item-quantity {
+    width: 50px;
+    text-align: center;
+}
+
+.remove-item-btn {
+    background: #e63946;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
 }
 
 #cart-summary {
+    margin-top: 20px;
+    padding-top: 10px;
+    border-top: 2px solid #333;
+}
+
+.cart-total-line {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    flex-wrap: wrap;
-    gap: 1rem;
+    padding: 5px 0;
 }
 
-.coupon-form, .cart-totals {
-    flex: 1;
-    min-width: 250px;
-}
-
-.coupon-form {
+#cart-actions {
+    margin-top: 20px;
     display: flex;
-    gap: 0.5rem;
+    flex-direction: column;
+    gap: 10px;
 }
 
-.coupon-form input {
-    flex-grow: 1;
-    padding: 0.5rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+#coupon-form, #applied-coupon-info {
+    display: flex;
+    justify-content: space-between;
 }
 
-.cart-totals {
-    text-align: right;
+#cart-actions input[type="text"] {
+    flex: 2;
+    padding: 5px;
 }
 
-.cart-totals p, .cart-totals h3 {
-    margin: 0.5rem 0;
-}
-
-.cart-totals h3 {
-    color: #333;
+#cart-actions button {
+    flex: 1;
+    padding: 8px;
+    cursor: pointer;
 }
 
 #checkout-btn {
-    display: block;
     width: 100%;
-    padding: 0.75rem;
-    background-color: #28a745;
+    background: #28a745;
     color: white;
     border: none;
-    border-radius: 5px;
-    font-size: 1.1rem;
-    cursor: pointer;
-    margin-top: 1rem;
 }
 
-#checkout-btn:hover {
-    background-color: #218838;
+/* Utility */
+.hidden {
+    display: none;
 }

@@ -7,8 +7,8 @@ from app.models.coupon import Coupon, CouponDiscountType
 from app.services.coupon_service import (
     CouponAlreadyUsedError,
     CouponExpiredError,
-    InvalidCouponError,
     CouponService,
+    InvalidCouponError,
 )
 
 
