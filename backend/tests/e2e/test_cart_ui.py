@@ -1,4 +1,5 @@
 import re
+import sqlite3
 
 from playwright.sync_api import Page, expect
 
@@ -8,11 +9,17 @@ CART = "#cart-section"
 
 
 def get_product_by_name(page: Page, name: str):
-    return page.locator(f".product:has-text('{name}')")
+    return page.locator(
+        ".product",
+        has=page.locator("h3", has_text=re.compile(rf"^\s*{re.escape(name)}\s*$")),
+    )
 
 
 def get_cart_item_by_name(page: Page, name: str):
-    return page.locator(f".cart-item:has-text('{name}')")
+    return page.locator(
+        ".cart-item",
+        has=page.locator("strong", has_text=re.compile(rf"^\s*{re.escape(name)}\s*$")),
+    )
 
 
 def test_cart_full_e2e_flow(page: Page):
@@ -251,3 +258,323 @@ def test_e2e_remove_all_items_clears_coupon_and_resets_ui(page: Page):
     expect(page.locator("#applied-coupon-info")).to_be_hidden()
     expect(page.locator("#coupon-form")).to_be_visible()
     expect(page.locator("#checkout-btn")).to_be_disabled()
+
+
+def test_e2e_ui_full_purchase_verifies_db_persistence(page: Page):
+    """
+    Fluxo 1 (UI + Banco E2E):
+    - Executa compra completa pela interface do usuário.
+    - Valida feedback visual no frontend.
+    - Valida diretamente a persistência no SQLite (ecommerce.db):
+      * Estoques decrementados.
+      * Registro em user_coupon_usages.
+      * Carrinho no estado ORDER_CREATED.
+    """
+    alerts = []
+    page.on("dialog", lambda dialog: (alerts.append(dialog.message), dialog.accept()))
+
+    page.goto("http://frontend")
+    expect(page.locator("h1")).to_have_text("Produtos")
+    expect(page.locator("#loading-indicator")).to_be_hidden(timeout=10000)
+
+    # Adicionar 1 Laptop Moderno
+    laptop_product = get_product_by_name(page, "Laptop Moderno")
+    laptop_product.locator(".add-to-cart-btn").click()
+    expect(get_cart_item_by_name(page, "Laptop Moderno")).to_be_visible(timeout=5000)
+
+    # Adicionar 1 Mouse Sem Fio Ergonômico
+    mouse_product = get_product_by_name(page, "Mouse Sem Fio Ergonômico")
+    mouse_product.locator(".add-to-cart-btn").click()
+    expect(get_cart_item_by_name(page, "Mouse Sem Fio Ergonômico")).to_be_visible(
+        timeout=5000
+    )
+
+    # Aplicar cupom SALE10 (10%)
+    page.locator("#coupon-code").fill("SALE10")
+    page.locator("#apply-coupon-btn").click()
+    expect(page.locator("#applied-coupon-info")).to_be_visible(timeout=5000)
+
+    # Subtotal 4650, desconto 465, total 4185
+    expect(page.locator("#cart-subtotal")).to_have_text("R$ 4.650,00")
+    expect(page.locator("#cart-total")).to_have_text("R$ 4.185,00")
+
+    # Iniciar checkout
+    checkout_btn = page.locator("#checkout-btn")
+    checkout_btn.click()
+    expect(checkout_btn).to_have_text("Confirmar Pedido", timeout=5000)
+
+    # Confirmar pedido
+    checkout_btn.click()
+    page.wait_for_timeout(1000)
+
+    # Verificar alerta de sucesso
+    assert any("sucesso" in msg.lower() or "confirmed" in msg.lower() for msg in alerts)
+
+    # Verificar que o carrinho resetou na UI
+    expect(page.locator("#cart-items-container")).to_contain_text(
+        "Seu carrinho está vazio.", timeout=5000
+    )
+    expect(page.locator("#cart-total")).to_have_text("R$ 0,00")
+    expect(checkout_btn).to_be_disabled()
+
+    # Validação direta no banco de dados SQLite
+    conn = sqlite3.connect("ecommerce.db")
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT stock FROM products WHERE name = 'Laptop Moderno'")
+    assert cursor.fetchone()["stock"] == 14  # 15 - 1
+
+    cursor.execute("SELECT stock FROM products WHERE name = 'Mouse Sem Fio Ergonômico'")
+    assert cursor.fetchone()["stock"] == 49  # 50 - 1
+
+    cursor.execute("SELECT * FROM user_coupon_usages WHERE user_id = 'user-123'")
+    assert cursor.fetchone() is not None
+
+    cursor.execute(
+        "SELECT status FROM carts WHERE user_id = 'user-123' ORDER BY id DESC"
+    )
+    # O último carrinho fechado deve estar como ORDER_CREATED
+    rows = cursor.fetchall()
+    assert any(r["status"] == "ORDER_CREATED" for r in rows)
+    conn.close()
+
+
+def test_e2e_ui_checkout_edit_return_and_completion(page: Page):
+    """
+    Fluxo 2 (UI + Banco E2E):
+    - Adiciona 1 Teclado Mecânico RGB.
+    - Entra em checkout ('Finalizar Compra').
+    - Retorna para edição ('Voltar para Edição').
+    - Altera quantidade de Teclado para 2 unidades.
+    - Adiciona 1 Mouse Sem Fio.
+    - Avança para checkout e confirma pedido.
+    - Valida que as quantidades atualizadas decrementaram corretamente no banco.
+    """
+    alerts = []
+    page.on("dialog", lambda dialog: (alerts.append(dialog.message), dialog.accept()))
+
+    page.goto("http://frontend")
+    expect(page.locator("h1")).to_have_text("Produtos")
+    expect(page.locator("#loading-indicator")).to_be_hidden(timeout=10000)
+
+    # Adicionar 1 Teclado Mecânico
+    teclado_product = get_product_by_name(page, "Teclado Mecânico RGB")
+    teclado_product.locator(".add-to-cart-btn").click()
+    expect(get_cart_item_by_name(page, "Teclado Mecânico RGB")).to_be_visible(
+        timeout=5000
+    )
+
+    # Entrar em checkout
+    checkout_btn = page.locator("#checkout-btn")
+    checkout_btn.click()
+    expect(checkout_btn).to_have_text("Confirmar Pedido", timeout=5000)
+    return_btn = page.locator("#return-to-cart-btn")
+    expect(return_btn).to_be_visible()
+
+    # Voltar para edição
+    return_btn.click()
+    expect(checkout_btn).to_have_text("Finalizar Compra", timeout=5000)
+    expect(return_btn).to_be_hidden()
+
+    # Alterar quantidade de Teclado para 2
+    teclado_item = get_cart_item_by_name(page, "Teclado Mecânico RGB")
+    teclado_item.locator(".item-quantity").fill("2")
+    expect(page.locator("#cart-subtotal")).to_have_text("R$ 700,00", timeout=5000)
+
+    # Adicionar 1 Mouse Sem Fio
+    mouse_product = get_product_by_name(page, "Mouse Sem Fio Ergonômico")
+    mouse_product.locator(".add-to-cart-btn").click()
+    expect(get_cart_item_by_name(page, "Mouse Sem Fio Ergonômico")).to_be_visible(
+        timeout=5000
+    )
+    expect(page.locator("#cart-total")).to_have_text("R$ 850,00", timeout=5000)
+
+    # Avançar para checkout e confirmar pedido
+    checkout_btn.click()
+    expect(checkout_btn).to_have_text("Confirmar Pedido", timeout=5000)
+    checkout_btn.click()
+    page.wait_for_timeout(1000)
+
+    assert any("sucesso" in msg.lower() or "confirmed" in msg.lower() for msg in alerts)
+
+    # Validação no banco SQLite
+    conn = sqlite3.connect("ecommerce.db")
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT stock FROM products WHERE name = 'Teclado Mecânico RGB'")
+    assert cursor.fetchone()["stock"] == 28  # 30 - 2
+
+    cursor.execute("SELECT stock FROM products WHERE name = 'Mouse Sem Fio Ergonômico'")
+    assert cursor.fetchone()["stock"] == 49  # 50 - 1
+    conn.close()
+
+
+def test_e2e_ui_stock_conflict_rollback_and_recovery(page: Page):
+    """
+    Fluxo 3 (UI + Banco E2E - RN-006 / RN-007):
+    - Usuário adiciona 2 unidades de Laptop na UI e entra em checkout.
+    - Ação concorrente altera o estoque do produto no banco para 1 unidade.
+    - Usuário clica em 'Confirmar Pedido'.
+    - UI exibe alerta de erro de estoque.
+    - Banco de dados permanece íntegro com rollback total (estoque permanece 1, sem cupom consumido).
+    - Usuário clica em 'Voltar para Edição', ajusta quantidade para 1 e conclui com sucesso.
+    """
+    alerts = []
+    page.on("dialog", lambda dialog: (alerts.append(dialog.message), dialog.accept()))
+
+    page.goto("http://frontend")
+    expect(page.locator("h1")).to_have_text("Produtos")
+    expect(page.locator("#loading-indicator")).to_be_hidden(timeout=10000)
+
+    laptop_product = get_product_by_name(page, "Laptop Moderno")
+    laptop_product.locator(".add-to-cart-btn").click()
+    laptop_item = get_cart_item_by_name(page, "Laptop Moderno")
+    expect(laptop_item).to_be_visible(timeout=5000)
+
+    # Ajustar para 2 unidades
+    laptop_item.locator(".item-quantity").fill("2")
+    expect(page.locator("#cart-total")).to_have_text("R$ 9.000,00", timeout=5000)
+
+    # Aplicar cupom SALE10
+    page.locator("#coupon-code").fill("SALE10")
+    page.locator("#apply-coupon-btn").click()
+    expect(page.locator("#applied-coupon-info")).to_be_visible(timeout=5000)
+
+    # Entrar em checkout
+    checkout_btn = page.locator("#checkout-btn")
+    checkout_btn.click()
+    expect(checkout_btn).to_have_text("Confirmar Pedido", timeout=5000)
+
+    # Ação concorrente: reduzir estoque de Laptop no banco diretamente para 1 unidade
+    conn = sqlite3.connect("ecommerce.db")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE products SET stock = 1 WHERE name = 'Laptop Moderno'")
+    conn.commit()
+    conn.close()
+
+    # Clicar em Confirmar Pedido com estoque insuficiente
+    checkout_btn.click()
+    page.wait_for_timeout(1000)
+
+    # Alerta de erro deve ter sido exibido
+    assert len(alerts) >= 1
+    assert any("stock" in msg.lower() or "estoque" in msg.lower() for msg in alerts)
+
+    # Validação do Rollback Atômico no banco de dados
+    conn = sqlite3.connect("ecommerce.db")
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT stock FROM products WHERE name = 'Laptop Moderno'")
+    assert cursor.fetchone()["stock"] == 1  # Não decrementou nem negativou
+
+    cursor.execute(
+        "SELECT COUNT(*) as cnt FROM user_coupon_usages WHERE user_id = 'user-123'"
+    )
+    assert cursor.fetchone()["cnt"] == 0  # Cupom não foi consumido
+    conn.close()
+
+    # Recuperação: voltar para edição e ajustar para 1 unidade
+    return_btn = page.locator("#return-to-cart-btn")
+    return_btn.click()
+    expect(checkout_btn).to_have_text("Finalizar Compra", timeout=5000)
+
+    laptop_item = get_cart_item_by_name(page, "Laptop Moderno")
+    laptop_item.locator(".item-quantity").fill("1")
+    expect(page.locator("#cart-total")).to_have_text("R$ 4.050,00", timeout=5000)
+
+    # Iniciar checkout e confirmar com quantidade ajustada
+    checkout_btn.click()
+    expect(checkout_btn).to_have_text("Confirmar Pedido", timeout=5000)
+    checkout_btn.click()
+    page.wait_for_timeout(1000)
+
+    # Validação final no banco
+    conn = sqlite3.connect("ecommerce.db")
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT stock FROM products WHERE name = 'Laptop Moderno'")
+    assert cursor.fetchone()["stock"] == 0  # Decrementado de 1 para 0
+
+    cursor.execute(
+        "SELECT COUNT(*) as cnt FROM user_coupon_usages WHERE user_id = 'user-123'"
+    )
+    assert cursor.fetchone()["cnt"] == 1
+    conn.close()
+
+
+def test_e2e_ui_coupon_lifecycle_and_reusage_blocked(page: Page):
+    """
+    Fluxo 4 (UI E2E - RN-001, RN-002, RN-005):
+    - Tenta aplicar cupom inexistente e expirado (bloqueados com alerta).
+    - Aplica cupom fixo 50FIXO (R$ 50,00).
+    - Conclui o pedido com o cupom aplicado.
+    - Inicia nova compra com o mesmo usuário e tenta aplicar novamente 50FIXO.
+    - Sistema bloqueia nova aplicação informando uso anterior (RN-002).
+    """
+    alerts = []
+    page.on("dialog", lambda dialog: (alerts.append(dialog.message), dialog.accept()))
+
+    page.goto("http://frontend")
+    expect(page.locator("h1")).to_have_text("Produtos")
+    expect(page.locator("#loading-indicator")).to_be_hidden(timeout=10000)
+
+    laptop_product = get_product_by_name(page, "Laptop Moderno")
+    laptop_product.locator(".add-to-cart-btn").click()
+    expect(get_cart_item_by_name(page, "Laptop Moderno")).to_be_visible(timeout=5000)
+
+    # 1. Cupom inexistente
+    page.locator("#coupon-code").fill("CUPOM_FALSO_123")
+    page.locator("#apply-coupon-btn").click()
+    page.wait_for_timeout(500)
+    assert any(
+        "does not exist" in msg.lower() or "inválido" in msg.lower() for msg in alerts
+    )
+    expect(page.locator("#cart-total")).to_have_text("R$ 4.500,00")
+
+    # 2. Cupom expirado
+    page.locator("#coupon-code").fill("EXPIRADO")
+    page.locator("#apply-coupon-btn").click()
+    page.wait_for_timeout(500)
+    assert any("expired" in msg.lower() or "expirado" in msg.lower() for msg in alerts)
+    expect(page.locator("#cart-total")).to_have_text("R$ 4.500,00")
+
+    # 3. Cupom fixo válido 50FIXO
+    page.locator("#coupon-code").fill("50FIXO")
+    page.locator("#apply-coupon-btn").click()
+    expect(page.locator("#applied-coupon-info")).to_be_visible(timeout=5000)
+    expect(page.locator("#cart-discount")).to_have_text(re.compile(r"-\s*R\$\s*50,00"))
+    expect(page.locator("#cart-total")).to_have_text("R$ 4.450,00")
+
+    # 4. Finalizar compra
+    checkout_btn = page.locator("#checkout-btn")
+    checkout_btn.click()
+    expect(checkout_btn).to_have_text("Confirmar Pedido", timeout=5000)
+    checkout_btn.click()
+    page.wait_for_timeout(1000)
+
+    # 5. Nova compra: adicionar Mouse Sem Fio
+    mouse_product = get_product_by_name(page, "Mouse Sem Fio Ergonômico")
+    mouse_product.locator(".add-to-cart-btn").click()
+    expect(get_cart_item_by_name(page, "Mouse Sem Fio Ergonômico")).to_be_visible(
+        timeout=5000
+    )
+    expect(page.locator("#cart-total")).to_have_text("R$ 150,00")
+
+    # 6. Tentar reutilizar 50FIXO
+    alerts.clear()
+    page.locator("#coupon-code").fill("50FIXO")
+    page.locator("#apply-coupon-btn").click()
+    page.wait_for_timeout(500)
+
+    # Alerta deve indicar que o cupom já foi utilizado
+    assert len(alerts) >= 1
+    assert any(
+        "already been used" in msg.lower()
+        or "já foi utilizado" in msg.lower()
+        or "utilizado" in msg.lower()
+        for msg in alerts
+    )
+    expect(page.locator("#applied-coupon-info")).to_be_hidden()
+    expect(page.locator("#cart-total")).to_have_text("R$ 150,00")

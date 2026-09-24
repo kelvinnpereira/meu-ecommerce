@@ -30,13 +30,19 @@ def test_product_listing_e2e(page: Page):
     # Check that all seeded products are rendered on the page
     for product_name in seeded_products:
         product_card = products_container.locator(
-            f".product:has-text('{product_name}')"
+            ".product",
+            has=page.locator(
+                "h3", has_text=re.compile(rf"^\s*{re.escape(product_name)}\s*$")
+            ),
         )
         expect(product_card).to_be_visible()
         print(f"Found product: {product_name}")
 
     # Optional: Check a specific detail for one product
-    laptop_card = products_container.locator(".product:has-text('Laptop Moderno')")
+    laptop_card = products_container.locator(
+        ".product",
+        has=page.locator("h3", has_text=re.compile(r"^\s*Laptop Moderno\s*$")),
+    )
     expect(
         laptop_card.locator("p", has_text=re.compile(r"Preço:\s*R\$\s*4500\.00"))
     ).to_be_visible()
