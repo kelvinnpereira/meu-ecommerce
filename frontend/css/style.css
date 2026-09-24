@@ -1,0 +1,165 @@
+/* General Body & Layout */
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    color: #333;
+}
+
+.container {
+    display: flex;
+    max-width: 1400px;
+    margin: auto;
+    overflow: hidden;
+    padding: 0 20px;
+}
+
+header {
+    background: #333;
+    color: #fff;
+    padding: 1rem 0;
+    text-align: center;
+}
+
+main {
+    flex: 3;
+    padding-right: 20px;
+}
+
+/* Products */
+#products-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 20px;
+    padding: 20px 0;
+}
+
+.product {
+    background: #fff;
+    border: 1px solid #ddd;
+    padding: 20px;
+    text-align: center;
+}
+
+.product img {
+    max-width: 100%;
+    height: auto;
+    margin-bottom: 10px;
+}
+
+.product h3 {
+    margin: 10px 0;
+}
+
+.product .price {
+    color: #0056b3;
+    font-weight: bold;
+    font-size: 1.2em;
+}
+
+.add-to-cart-btn {
+    background: #0056b3;
+    color: #fff;
+    border: 0;
+    padding: 10px 15px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.add-to-cart-btn:hover {
+    background: #004494;
+}
+
+/* Cart Sidebar */
+.cart-sidebar {
+    flex: 1;
+    background: #fff;
+    padding: 20px;
+    border-left: 1px solid #ddd;
+    margin-top: 20px;
+}
+
+#cart-section h2 {
+    margin-top: 0;
+    text-align: center;
+}
+
+.cart-item {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.cart-item .item-info {
+    margin-bottom: 5px;
+}
+
+.cart-item .item-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.item-quantity {
+    width: 50px;
+    text-align: center;
+}
+
+.remove-item-btn {
+    background: #e63946;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+#cart-summary {
+    margin-top: 20px;
+    padding-top: 10px;
+    border-top: 2px solid #333;
+}
+
+.cart-total-line {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+}
+
+#cart-actions {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#coupon-form, #applied-coupon-info {
+    display: flex;
+    justify-content: space-between;
+}
+
+#cart-actions input[type="text"] {
+    flex: 2;
+    padding: 5px;
+}
+
+#cart-actions button {
+    flex: 1;
+    padding: 8px;
+    cursor: pointer;
+}
+
+#checkout-btn {
+    width: 100%;
+    background: #28a745;
+    color: white;
+    border: none;
+}
+
+/* Utility */
+.hidden {
+    display: none;
+}

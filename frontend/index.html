@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http:; connect-src 'self' http://localhost:8000 http://127.0.0.1:8000; font-src 'self';">
+    <title>Meu E-commerce</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <h1>Produtos</h1>
+    </header>
+    <div class="container">
+        <main>
+            <div id="loading-indicator">Carregando...</div>
+            <div id="products-container" class="hidden"></div>
+        </main>
+        <aside class="cart-sidebar">
+            <div id="cart-section">
+                <h2>Seu Carrinho</h2>
+                <div id="cart-items-container">
+                    <p>Carregando carrinho...</p>
+                </div>
+                <div id="cart-summary">
+                    <div class="cart-total-line">
+                        <span>Subtotal:</span>
+                        <span id="cart-subtotal">R$ 0,00</span>
+                    </div>
+                    <div class="cart-total-line" id="cart-discount-container">
+                        <span>Desconto:</span>
+                        <span id="cart-discount">R$ 0,00</span>
+                    </div>
+                    <div class="cart-total-line">
+                        <strong>Total:</strong>
+                        <strong id="cart-total">R$ 0,00</strong>
+                    </div>
+                </div>
+                <div id="cart-actions">
+                    <div id="coupon-form">
+                        <input type="text" id="coupon-code" placeholder="Código do Cupom">
+                        <button id="apply-coupon-btn">Aplicar</button>
+                    </div>
+                    <div id="applied-coupon-info" style="display: none;">
+                        <span>Cupom: <span id="applied-coupon-code"></span></span>
+                        <button id="remove-coupon-btn">Remover</button>
+                    </div>
+                    <button id="checkout-btn">Finalizar Compra</button>
+                </div>
+            </div>
+        </aside>
+    </div>
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
