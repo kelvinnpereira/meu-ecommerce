@@ -18,6 +18,9 @@ class CouponRepository:
             .first()
         )
 
+    def get_by_id(self, coupon_id: int) -> Optional[Coupon]:
+        return self.db.query(Coupon).filter(Coupon.id == coupon_id).first()
+
     def get_usage_by_user_and_coupon(
         self, user_id: str, coupon_id: int
     ) -> Optional[UserCouponUsage]:

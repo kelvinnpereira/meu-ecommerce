@@ -20,6 +20,23 @@ class CouponService:
     def __init__(self, coupon_repository: CouponRepository):
         self.coupon_repository = coupon_repository
 
+    def _validate_coupon_instance(self, coupon: Coupon, user_id: str) -> Coupon:
+        now = (
+            datetime.now(timezone.utc)
+            if coupon.expires_at.tzinfo
+            else datetime.now(timezone.utc).replace(tzinfo=None)
+        )
+        if coupon.expires_at < now:
+            raise CouponExpiredError("Coupon has expired.")
+
+        usage = self.coupon_repository.get_usage_by_user_and_coupon(
+            user_id=user_id, coupon_id=coupon.id
+        )
+        if usage:
+            raise CouponAlreadyUsedError("Coupon has already been used by this user.")
+
+        return coupon
+
     def validate_coupon(self, code: str, user_id: str) -> Coupon:
         """
         Validates a coupon by its code for a specific user.
@@ -45,32 +62,25 @@ class CouponService:
         if not coupon:
             raise InvalidCouponError("Coupon does not exist.")
 
-        now = (
-            datetime.now(timezone.utc)
-            if coupon.expires_at.tzinfo
-            else datetime.now(timezone.utc).replace(tzinfo=None)
-        )
-        if coupon.expires_at < now:
-            raise CouponExpiredError("Coupon has expired.")
+        return self._validate_coupon_instance(coupon, user_id)
 
-        usage = self.coupon_repository.get_usage_by_user_and_coupon(
-            user_id=user_id, coupon_id=coupon.id
-        )
-        if usage:
-            raise CouponAlreadyUsedError("Coupon has already been used by this user.")
+    def validate_coupon_by_id(self, coupon_id: int, user_id: str) -> Coupon:
+        """
+        Validates a coupon by its ID for a specific user.
+        """
+        coupon = self.coupon_repository.get_by_id(coupon_id)
 
-        return coupon
+        if not coupon:
+            raise InvalidCouponError("Coupon does not exist.")
+
+        return self._validate_coupon_instance(coupon, user_id)
 
     def mark_coupon_as_used(self, coupon_id: int, user_id: str, order_id: str):
         """
         Marks a coupon as used by a user for a specific order.
+        Re-validates that the coupon is valid, not expired, and not already used.
         """
-        # First, re-validate that the user hasn't used it in a concurrent transaction.
-        usage = self.coupon_repository.get_usage_by_user_and_coupon(
-            user_id=user_id, coupon_id=coupon_id
-        )
-        if usage:
-            raise CouponAlreadyUsedError("Coupon has already been used by this user.")
+        self.validate_coupon_by_id(coupon_id, user_id)
 
         self.coupon_repository.create_usage(
             user_id=user_id, coupon_id=coupon_id, order_id=order_id

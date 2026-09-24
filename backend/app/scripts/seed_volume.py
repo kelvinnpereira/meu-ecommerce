@@ -513,7 +513,7 @@ def generate_unique_product_records(
                             f"Especificações principais: {spec}.",
                             "Excelente acabamento e durabilidade comprovada no segmento.",
                         ]
-                        desc = f"{' '.join(desc_phrases[:random.randint(2, 3)])}"
+                        desc = f"{' '.join(desc_phrases[: random.randint(2, 3)])}"
                         if len(desc) > 255:
                             desc = desc[:252] + "..."
                     else:

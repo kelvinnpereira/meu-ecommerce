@@ -1,6 +1,15 @@
 import enum
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, Numeric, String
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -26,6 +35,9 @@ class Coupon(Base):
 
 class UserCouponUsage(Base):
     __tablename__ = "user_coupon_usages"
+    __table_args__ = (
+        UniqueConstraint("user_id", "coupon_id", name="uq_user_coupon_usage"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, index=True, nullable=False)

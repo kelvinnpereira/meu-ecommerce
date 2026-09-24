@@ -1,3 +1,5 @@
+import { escapeHtml, sanitizeUrl } from '../utils/sanitize.js';
+
 /**
  * Renders the list of products into the DOM.
  * @param {Array<object>} products - The array of product objects.
@@ -11,15 +13,23 @@ export const renderProducts = (products) => {
         return;
     }
 
-    const productCards = products.map(product => `
-        <div class="product" data-product-id="${product.id}">
-            <img src="${product.image_url || 'https://via.placeholder.com/150'}" alt="${product.name}">
-            <h3>${product.name}</h3>
-            <p class="price">Preço: R$ ${product.price.toFixed(2)}</p>
-            <p>Estoque: ${product.stock}</p>
+    const productCards = products.map(product => {
+        const id = escapeHtml(product.id);
+        const name = escapeHtml(product.name);
+        const imageUrl = sanitizeUrl(product.image_url);
+        const price = typeof product.price === 'number' ? product.price.toFixed(2) : escapeHtml(product.price);
+        const stock = escapeHtml(product.stock);
+
+        return `
+        <div class="product" data-product-id="${id}">
+            <img src="${imageUrl}" alt="${name}">
+            <h3>${name}</h3>
+            <p class="price">Preço: R$ ${price}</p>
+            <p>Estoque: ${stock}</p>
             <button class="add-to-cart-btn">Adicionar ao Carrinho</button>
         </div>
-    `).join('');
+    `;
+    }).join('');
 
     container.innerHTML = productCards;
 };

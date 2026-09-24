@@ -1,11 +1,16 @@
 from typing import ClassVar, Dict, List
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.cart import Cart, CartItem, CartStatusEnum
 from app.repositories.cart_repository import CartRepository
 from app.repositories.coupon_repository import CouponRepository
-from app.services.coupon_service import CouponService, InvalidCouponError
+from app.services.coupon_service import (
+    CouponAlreadyUsedError,
+    CouponService,
+    InvalidCouponError,
+)
 from app.services.product_service import ProductService
 
 
@@ -307,6 +312,9 @@ class CartService:
         except (InsufficientStockError, InvalidCouponError):
             self.db.rollback()
             raise
+        except IntegrityError:
+            self.db.rollback()
+            raise CouponAlreadyUsedError("Coupon has already been used.")
         except Exception:
             self.db.rollback()
             raise

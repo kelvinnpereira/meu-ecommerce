@@ -1,6 +1,6 @@
 import datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # Coupon Schemas
@@ -22,9 +22,14 @@ class CouponRead(CouponBase):
 
 
 class CouponApply(BaseModel):
-    coupon_code: str
+    coupon_code: str = Field(..., max_length=50)
 
     @field_validator("coupon_code")
     @classmethod
     def sanitize_coupon_code(cls, v: str) -> str:
-        return v.strip()
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Coupon code cannot be empty")
+        if len(stripped) > 50:
+            raise ValueError("Coupon code is too long")
+        return stripped

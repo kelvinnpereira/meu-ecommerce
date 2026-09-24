@@ -20,8 +20,8 @@ class CouponRead(BaseModel):
 
 # Cart Item Schemas
 class CartItemBase(BaseModel):
-    product_id: str
-    quantity: int = Field(..., gt=0)
+    product_id: str = Field(..., pattern=r"^\d+$", max_length=20)
+    quantity: int = Field(..., gt=0, le=9999)
 
 
 class CartItemCreate(CartItemBase):
@@ -29,7 +29,7 @@ class CartItemCreate(CartItemBase):
 
 
 class CartItemUpdate(BaseModel):
-    quantity: int = Field(..., ge=0)
+    quantity: int = Field(..., ge=0, le=9999)
 
 
 class CartItemRead(CartItemBase):

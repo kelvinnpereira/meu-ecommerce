@@ -107,7 +107,14 @@ class SpyCouponService:
 
         return coupon
 
+    def validate_coupon_by_id(self, coupon_id: int, user_id: str) -> Coupon:
+        for c in self.coupons.values():
+            if c.id == coupon_id:
+                return self.validate_coupon(c.code, user_id)
+        raise InvalidCouponError("Coupon does not exist.")
+
     def mark_coupon_as_used(self, coupon_id: int, user_id: str, order_id: str):
+        self.validate_coupon_by_id(coupon_id, user_id)
         self.used_calls.append(
             {"coupon_id": coupon_id, "user_id": user_id, "order_id": order_id}
         )

@@ -1,4 +1,5 @@
 // frontend/js/views/cartView.js
+import { escapeHtml } from '../utils/sanitize.js';
 
 let productsMap = new Map();
 
@@ -42,10 +43,13 @@ const renderCartItem = (item) => {
         : (product && product.price) || 0;
     const stock = (product && product.stock) || 99;
 
+    const escapedProductId = escapeHtml(item.product_id);
+    const escapedProductName = escapeHtml(productName);
+
     return `
-        <div class="cart-item" data-product-id="${item.product_id}">
+        <div class="cart-item" data-product-id="${escapedProductId}">
             <div class="item-info">
-                <strong>${productName}</strong>
+                <strong>${escapedProductName}</strong>
                 <div>${formatCurrency(unitPrice)}</div>
             </div>
             <div class="item-actions">
