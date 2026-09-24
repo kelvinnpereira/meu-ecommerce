@@ -1,4 +1,4 @@
-.PHONY: up down test format logs seed
+.PHONY: up down test format logs seed seed-volume
 
 up:
 	docker compose up --build -d
@@ -18,3 +18,7 @@ format:
 
 seed:
 	docker compose exec backend python -m app.scripts.seed
+
+seed-volume:
+	docker compose exec backend python -m app.scripts.seed_volume
+
