@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models.coupon import Coupon, CouponDiscountType
+from app.models.coupon import Coupon, CouponDiscountType, UserCouponUsage
 from app.models.product import Product
 
 USER_ID = "user-123"
@@ -471,3 +471,135 @@ def test_confirm_order_not_in_checkout_fails(
     # Cart is WITH_ITEMS, not IN_CHECKOUT
     response = client.post("/api/v1/cart/confirm", headers=HEADERS)
     assert response.status_code == 409
+
+
+def test_apply_expired_coupon_returns_422(
+    client: TestClient, product_in_stock: Product, db_session: Session
+):
+    """
+    RF-006, RN-005, Seção 7: Applying an expired coupon must return HTTP 422 (not 500).
+    """
+    expired_coupon = Coupon(
+        code="EXPIRADO20",
+        discount_type=CouponDiscountType.PERCENTAGE,
+        value=20.0,
+        expires_at=utc_now() - timedelta(days=2),
+        max_uses_per_user=1,
+    )
+    db_session.add(expired_coupon)
+    db_session.commit()
+
+    client.post(
+        "/api/v1/cart/items",
+        headers=HEADERS,
+        json={"product_id": str(product_in_stock.id), "quantity": 1},
+    )
+
+    response = client.post(
+        "/api/v1/cart/coupon",
+        headers=HEADERS,
+        json={"coupon_code": "EXPIRADO20"},
+    )
+    assert response.status_code == 422
+    assert "expired" in response.json()["detail"].lower()
+
+
+def test_apply_already_used_coupon_returns_422(
+    client: TestClient,
+    product_in_stock: Product,
+    valid_percentage_coupon: Coupon,
+    db_session: Session,
+):
+    """
+    RF-006, RN-002, Seção 7: Applying an already used coupon must return HTTP 422 (not 500).
+    """
+    usage = UserCouponUsage(
+        user_id=USER_ID,
+        coupon_id=valid_percentage_coupon.id,
+        order_id="prev_order_999",
+    )
+    db_session.add(usage)
+    db_session.commit()
+
+    client.post(
+        "/api/v1/cart/items",
+        headers=HEADERS,
+        json={"product_id": str(product_in_stock.id), "quantity": 1},
+    )
+
+    response = client.post(
+        "/api/v1/cart/coupon",
+        headers=HEADERS,
+        json={"coupon_code": valid_percentage_coupon.code},
+    )
+    assert response.status_code == 422
+    assert "already been used" in response.json()["detail"].lower()
+
+
+def test_confirm_order_insufficient_stock_returns_422_and_rolls_back(
+    client: TestClient,
+    product_in_stock: Product,
+    db_session: Session,
+):
+    """
+    RF-010, RN-007: When stock is insufficient during confirmation,
+    operation fails with 422, rollback occurs, and cart stays in IN_CHECKOUT.
+    """
+    client.post(
+        "/api/v1/cart/items",
+        headers=HEADERS,
+        json={"product_id": str(product_in_stock.id), "quantity": 5},
+    )
+    client.post("/api/v1/cart/checkout", headers=HEADERS)
+
+    # Concurrently reduce available stock to 2
+    product_in_stock.stock = 2
+    db_session.commit()
+
+    response = client.post("/api/v1/cart/confirm", headers=HEADERS)
+    assert response.status_code == 422
+    assert "insufficient stock" in response.json()["detail"].lower()
+
+    # Stock was not decremented
+    db_session.refresh(product_in_stock)
+    assert product_in_stock.stock == 2
+
+    # Cart remains in IN_CHECKOUT
+    cart_resp = client.get("/api/v1/cart", headers=HEADERS)
+    assert cart_resp.status_code == 200
+    assert cart_resp.json()["status"] == "IN_CHECKOUT"
+
+
+def test_user_can_create_new_cart_after_confirming_order(
+    client: TestClient,
+    product_in_stock: Product,
+):
+    """
+    RN-009: After confirming an order, user can start a new cart and place another order.
+    """
+    client.post(
+        "/api/v1/cart/items",
+        headers=HEADERS,
+        json={"product_id": str(product_in_stock.id), "quantity": 2},
+    )
+    client.post("/api/v1/cart/checkout", headers=HEADERS)
+    confirm_resp = client.post("/api/v1/cart/confirm", headers=HEADERS)
+    assert confirm_resp.status_code == 200
+    assert confirm_resp.json()["cart_status"] == "ORDER_CREATED"
+
+    # User explicitly creates a new cart (RF-001)
+    new_cart_resp = client.post("/api/v1/cart", headers=HEADERS)
+    assert new_cart_resp.status_code == 200
+    data = new_cart_resp.json()
+    assert data["status"] == "EMPTY"
+    assert data["items"] == []
+
+    # User can add items to this new cart
+    add_resp = client.post(
+        "/api/v1/cart/items",
+        headers=HEADERS,
+        json={"product_id": str(product_in_stock.id), "quantity": 1},
+    )
+    assert add_resp.status_code == 200
+    assert add_resp.json()["status"] == "WITH_ITEMS"
+    assert len(add_resp.json()["items"]) == 1

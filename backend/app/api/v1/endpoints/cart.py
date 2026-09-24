@@ -16,6 +16,7 @@ from app.services.coupon_service import InvalidCouponError
 router = APIRouter()
 
 
+@router.get("", response_model=CartRead)
 @router.get("/", response_model=CartRead)
 def read_cart(
     user_id: str = Depends(deps.get_user_id),
@@ -25,6 +26,18 @@ def read_cart(
     Retrieve the user's current cart.
     """
     return cart_service.get_or_create_cart(user_id=user_id)
+
+
+@router.post("", response_model=CartRead)
+@router.post("/", response_model=CartRead)
+def create_cart(
+    user_id: str = Depends(deps.get_user_id),
+    cart_service: CartService = Depends(deps.get_cart_service),  # noqa: B008
+):
+    """
+    Explicitly create a new cart (RF-001).
+    """
+    return cart_service.create_cart(user_id=user_id)
 
 
 @router.post("/items", response_model=CartRead)

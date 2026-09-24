@@ -1,7 +1,7 @@
 """Add cart and coupon tables
 
 Revision ID: 5ec7ade18b3f
-Revises: 
+Revises:
 Create Date: 2026-09-23 14:00:00.000000
 
 """
@@ -67,7 +67,7 @@ def upgrade():
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_carts_id"), "carts", ["id"], unique=False)
-    op.create_index(op.f("ix_carts_user_id"), "carts", ["user_id"], unique=True)
+    op.create_index(op.f("ix_carts_user_id"), "carts", ["user_id"], unique=False)
 
     op.create_table(
         "cart_items",

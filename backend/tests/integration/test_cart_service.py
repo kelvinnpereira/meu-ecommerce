@@ -9,6 +9,7 @@ from app.models.product import Product
 from app.services.cart_service import (
     CartEmptyError,
     CartService,
+    InsufficientStockError,
     InvalidTransitionError,
 )
 from app.services.coupon_service import (
@@ -307,3 +308,78 @@ def test_coupon_removed_when_cart_emptied(
     cart_empty = cart_service.remove_item(user_id, product_id=str(sample_product.id))
     assert cart_empty.coupon_id is None
     assert cart_empty.status == CartStatusEnum.EMPTY
+
+
+def test_confirm_order_stock_conflict_rolls_back_and_preserves_checkout_state(
+    cart_service: CartService, db_session: Session, sample_product: Product
+):
+    """RN-007: Test atomic rollback when stock becomes insufficient during confirmation."""
+    user_id = "user_test_confirm_rollback"
+    coupon = Coupon(
+        code="ROLLBACK10",
+        discount_type=CouponDiscountType.PERCENTAGE,
+        value=10.0,
+        expires_at=utc_now() + timedelta(days=10),
+    )
+    db_session.add(coupon)
+    db_session.commit()
+
+    cart_service.add_item(user_id, product_id=str(sample_product.id), quantity=5)
+    cart_service.apply_coupon(user_id, "ROLLBACK10")
+    cart_service.start_checkout(user_id)
+
+    # Concurrently reduce product stock below requested quantity
+    sample_product.stock = 2
+    db_session.commit()
+
+    with pytest.raises(InsufficientStockError):
+        cart_service.confirm_order(user_id)
+
+    # Cart must remain in IN_CHECKOUT and product stock must remain 2 (not decremented)
+    cart = cart_service.get_or_create_cart(user_id)
+    assert cart.status == CartStatusEnum.IN_CHECKOUT
+    db_session.refresh(sample_product)
+    assert sample_product.stock == 2
+
+
+def test_return_to_cart_when_not_in_checkout_raises_invalid_transition(
+    cart_service: CartService, sample_product: Product
+):
+    """RF-009: return_to_cart must only be allowed from IN_CHECKOUT state."""
+    user_id = "user_test_return_invalid"
+    cart_service.get_or_create_cart(user_id)
+
+    # From EMPTY
+    with pytest.raises(InvalidTransitionError):
+        cart_service.return_to_cart(user_id)
+
+    # From WITH_ITEMS
+    cart_service.add_item(user_id, str(sample_product.id), 1)
+    with pytest.raises(InvalidTransitionError):
+        cart_service.return_to_cart(user_id)
+
+
+def test_new_cart_created_after_previous_order_completed(
+    cart_service: CartService, sample_product: Product
+):
+    """RN-009: After confirming an order, attempting mutation fails, but user can explicitly start a new active cart."""
+    user_id = "user_test_new_cart_post_order"
+    cart_service.add_item(user_id, str(sample_product.id), 2)
+    cart_service.start_checkout(user_id)
+    first_cart = cart_service.confirm_order(user_id)
+    assert first_cart.status == CartStatusEnum.ORDER_CREATED
+
+    # Attempting to mutate the confirmed cart fails
+    with pytest.raises(InvalidTransitionError):
+        cart_service.add_item(user_id, str(sample_product.id), 1)
+
+    # User explicitly starts a new cart (RF-001)
+    new_cart = cart_service.create_cart(user_id)
+    assert new_cart.id != first_cart.id
+    assert new_cart.status == CartStatusEnum.EMPTY
+    assert len(new_cart.items) == 0
+
+    # User can add items to the new cart normally
+    updated_cart = cart_service.add_item(user_id, str(sample_product.id), 1)
+    assert updated_cart.status == CartStatusEnum.WITH_ITEMS
+    assert len(updated_cart.items) == 1

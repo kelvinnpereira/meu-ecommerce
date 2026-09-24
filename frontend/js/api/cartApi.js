@@ -30,12 +30,23 @@ export const getCart = (userId) => {
     return apiRequest('GET', '', null, userId);
 };
 
+export const createCart = (userId) => {
+    return apiRequest('POST', '', null, userId);
+};
+
 export const addItem = (userId, productId, quantity) => {
     return apiRequest('POST', '/items', { product_id: productId, quantity }, userId);
 };
 
-export const updateItemQuantity = (userId, productId, quantity) => {
-    return apiRequest('PUT', `/items/${productId}`, { quantity }, userId);
+export const updateItemQuantity = async (userId, productId, quantity) => {
+    try {
+        return await apiRequest('PUT', `/items/${productId}`, { quantity }, userId);
+    } catch (error) {
+        if (error.body && error.body.detail && error.body.detail.includes('ORDER_CREATED')) {
+            return await createCart(userId);
+        }
+        throw error;
+    }
 };
 
 export const removeItem = async (userId, productId) => {
@@ -45,6 +56,10 @@ export const removeItem = async (userId, productId) => {
         // If the item is already not in the cart (404), fetch current cart
         if (error.body && error.body.detail && error.body.detail.includes('not found')) {
             return await getCart(userId);
+        }
+        // If the cart was already converted to an order (409), start a fresh cart
+        if (error.body && error.body.detail && error.body.detail.includes('ORDER_CREATED')) {
+            return await createCart(userId);
         }
         throw error;
     }
@@ -57,3 +72,16 @@ export const applyCoupon = (userId, couponCode) => {
 export const removeCoupon = (userId) => {
     return apiRequest('DELETE', '/coupon', null, userId);
 };
+
+export const startCheckout = (userId) => {
+    return apiRequest('POST', '/checkout', null, userId);
+};
+
+export const returnToCart = (userId) => {
+    return apiRequest('DELETE', '/checkout', null, userId);
+};
+
+export const confirmOrder = (userId) => {
+    return apiRequest('POST', '/confirm', null, userId);
+};
+

@@ -8,11 +8,11 @@ class InvalidCouponError(Exception):
     pass
 
 
-class CouponExpiredError(Exception):
+class CouponExpiredError(InvalidCouponError):
     pass
 
 
-class CouponAlreadyUsedError(Exception):
+class CouponAlreadyUsedError(InvalidCouponError):
     pass
 
 

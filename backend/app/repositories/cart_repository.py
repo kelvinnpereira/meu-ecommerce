@@ -15,6 +15,7 @@ class CartRepository:
             self.db.query(Cart)
             .options(joinedload(Cart.items), joinedload(Cart.coupon))
             .filter(Cart.user_id == user_id)
+            .order_by(Cart.id.desc())
             .first()
         )
 

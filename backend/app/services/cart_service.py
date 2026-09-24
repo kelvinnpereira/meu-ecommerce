@@ -92,6 +92,10 @@ class CartService:
             cart = self.cart_repository.create(user_id)
         return cart
 
+    def create_cart(self, user_id: str) -> Cart:
+        """RF-001: Explicitly creates a new cart for the user."""
+        return self.cart_repository.create(user_id)
+
     def add_item(self, user_id: str, product_id: str, quantity: int) -> Cart:
         """T-006: Adds an item to the cart, validating stock and product existence."""
         if quantity <= 0:
@@ -242,6 +246,8 @@ class CartService:
     def return_to_cart(self, user_id: str) -> Cart:
         """T-011: Returns the cart from 'IN_CHECKOUT' to 'WITH_ITEMS' state for editing."""
         cart = self.get_or_create_cart(user_id)
+        if cart.status != CartStatusEnum.IN_CHECKOUT:
+            raise InvalidTransitionError(cart.status, CartStatusEnum.WITH_ITEMS)
 
         self._change_cart_status(cart, CartStatusEnum.WITH_ITEMS)
 
@@ -265,8 +271,12 @@ class CartService:
 
         # --- Atomic Transaction Block ---
         try:
+            # Sort items by product_id to ensure deterministic lock acquisition and prevent deadlocks
+            sorted_items = sorted(cart.items, key=lambda item: int(item.product_id))
+
             # Lock products and check stock
-            for item in cart.items:
+            products_to_update = []
+            for item in sorted_items:
                 product = self.product_service.get_product_by_id_for_update(
                     int(item.product_id)
                 )
@@ -274,12 +284,11 @@ class CartService:
                     raise InsufficientStockError(
                         item.product_id, item.quantity, product.stock
                     )
+                products_to_update.append((product, item.quantity))
 
-            # If all checks pass, decrement stock
-            for item in cart.items:
-                self.product_service.decrement_stock(
-                    int(item.product_id), item.quantity
-                )
+            # If all checks pass, decrement stock on the already locked products
+            for product, quantity in products_to_update:
+                product.stock -= quantity
 
             # Mark coupon as used if applicable
             if cart.coupon_id:

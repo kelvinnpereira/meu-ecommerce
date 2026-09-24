@@ -73,14 +73,73 @@ export const render = (cart) => {
         const appliedCouponInfo = document.getElementById('applied-coupon-info');
         const appliedCouponCode = document.getElementById('applied-coupon-code');
         const couponInput = document.getElementById('coupon-code');
+        const checkoutBtn = document.getElementById('checkout-btn');
+        let returnBtn = document.getElementById('return-to-cart-btn');
 
         if (!cart || cart.items.length === 0) {
             if (cartItemsContainer) {
                 cartItemsContainer.innerHTML = '<p>Seu carrinho está vazio.</p>';
             }
+            if (checkoutBtn) {
+                checkoutBtn.disabled = true;
+                checkoutBtn.textContent = 'Finalizar Compra';
+                checkoutBtn.style.backgroundColor = '';
+            }
+            if (returnBtn) {
+                returnBtn.style.display = 'none';
+            }
+        } else if (cart.status === 'ORDER_CREATED') {
+            if (cartItemsContainer) {
+                cartItemsContainer.innerHTML = `
+                    <div style="padding: 12px; background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 4px; text-align: center; margin-bottom: 10px;">
+                        <strong style="color: #2e7d32; display: block; margin-bottom: 5px;">Pedido Confirmado!</strong>
+                        <span style="font-size: 0.9em; color: #555;">Seu pedido foi registrado com sucesso.</span>
+                    </div>
+                `;
+            }
+            if (checkoutBtn) {
+                checkoutBtn.disabled = false;
+                checkoutBtn.textContent = 'Iniciar Nova Compra';
+                checkoutBtn.style.backgroundColor = '#28a745';
+            }
+            if (returnBtn) {
+                returnBtn.style.display = 'none';
+            }
+        } else if (cart.status === 'IN_CHECKOUT') {
+            if (cartItemsContainer) {
+                cartItemsContainer.innerHTML = cart.items.map(renderCartItem).join('');
+            }
+            if (checkoutBtn) {
+                checkoutBtn.disabled = false;
+                checkoutBtn.textContent = 'Confirmar Pedido';
+                checkoutBtn.style.backgroundColor = '';
+            }
+            if (!returnBtn && checkoutBtn && checkoutBtn.parentNode) {
+                returnBtn = document.createElement('button');
+                returnBtn.id = 'return-to-cart-btn';
+                returnBtn.textContent = 'Voltar para Edição';
+                returnBtn.style.backgroundColor = '#6c757d';
+                returnBtn.style.color = '#fff';
+                returnBtn.style.border = 'none';
+                returnBtn.style.padding = '8px 12px';
+                returnBtn.style.cursor = 'pointer';
+                returnBtn.style.marginBottom = '5px';
+                checkoutBtn.parentNode.insertBefore(returnBtn, checkoutBtn);
+            }
+            if (returnBtn) {
+                returnBtn.style.display = 'block';
+            }
         } else {
             if (cartItemsContainer) {
                 cartItemsContainer.innerHTML = cart.items.map(renderCartItem).join('');
+            }
+            if (checkoutBtn) {
+                checkoutBtn.disabled = false;
+                checkoutBtn.textContent = 'Finalizar Compra';
+                checkoutBtn.style.backgroundColor = '';
+            }
+            if (returnBtn) {
+                returnBtn.style.display = 'none';
             }
         }
 

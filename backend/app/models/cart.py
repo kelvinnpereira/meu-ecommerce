@@ -19,7 +19,7 @@ class Cart(Base):
     __tablename__ = "carts"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, unique=True, index=True, nullable=False)
+    user_id = Column(String, index=True, nullable=False)
     status = Column(Enum(CartStatusEnum), default=CartStatusEnum.EMPTY, nullable=False)
     coupon_id = Column(Integer, ForeignKey("coupons.id"), nullable=True)
 
