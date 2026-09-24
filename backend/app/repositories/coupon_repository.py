@@ -14,7 +14,7 @@ class CouponRepository:
     def get_by_code(self, code: str) -> Optional[Coupon]:
         return (
             self.db.query(Coupon)
-            .filter(func.upper(Coupon.code) == func.upper(code))
+            .filter(func.upper(Coupon.code) == func.upper(code.strip()))
             .first()
         )
 

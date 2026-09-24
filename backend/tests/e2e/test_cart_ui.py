@@ -117,3 +117,137 @@ def test_decrease_quantity_to_zero_removes_item(page: Page):
     expect(get_cart_item_by_name(page, "Laptop Moderno")).to_be_visible()
     expect(page.locator("#cart-total")).to_have_text("R$ 4.500,00")
     assert len(alerts) == 0, f"Unexpected alert shown: {alerts}"
+
+
+def test_e2e_checkout_and_return_to_cart_flow(page: Page):
+    """
+    Tests RF-008 and RF-009 on the UI:
+    1. Add product to cart.
+    2. Click 'Finalizar Compra' -> button changes to 'Confirmar Pedido' and 'Voltar para Edição' appears.
+    3. Click 'Voltar para Edição' -> button returns to 'Finalizar Compra' and return button disappears.
+    """
+    page.goto("http://frontend")
+    expect(page.locator("h1")).to_have_text("Produtos")
+    expect(page.locator("#loading-indicator")).to_be_hidden(timeout=10000)
+
+    laptop_product = get_product_by_name(page, "Laptop Moderno")
+    laptop_product.locator(".add-to-cart-btn").click()
+    expect(get_cart_item_by_name(page, "Laptop Moderno")).to_be_visible(timeout=5000)
+
+    checkout_btn = page.locator("#checkout-btn")
+    expect(checkout_btn).to_have_text("Finalizar Compra")
+
+    # Click checkout
+    checkout_btn.click()
+    expect(checkout_btn).to_have_text("Confirmar Pedido", timeout=5000)
+    return_btn = page.locator("#return-to-cart-btn")
+    expect(return_btn).to_be_visible()
+
+    # Click return to cart
+    return_btn.click()
+    expect(checkout_btn).to_have_text("Finalizar Compra", timeout=5000)
+    expect(return_btn).to_be_hidden()
+
+
+def test_e2e_complete_checkout_and_confirm_order(page: Page):
+    """
+    Tests RF-010 on the UI:
+    1. Add product and apply coupon.
+    2. Start checkout.
+    3. Confirm order, verifying success dialog and post-order clean state.
+    """
+    alerts = []
+    page.on("dialog", lambda dialog: (alerts.append(dialog.message), dialog.accept()))
+
+    page.goto("http://frontend")
+    expect(page.locator("h1")).to_have_text("Produtos")
+    expect(page.locator("#loading-indicator")).to_be_hidden(timeout=10000)
+
+    laptop_product = get_product_by_name(page, "Laptop Moderno")
+    laptop_product.locator(".add-to-cart-btn").click()
+    expect(get_cart_item_by_name(page, "Laptop Moderno")).to_be_visible(timeout=5000)
+
+    # Apply coupon
+    page.locator("#coupon-code").fill("SALE10")
+    page.locator("#apply-coupon-btn").click()
+    expect(page.locator("#applied-coupon-info")).to_be_visible(timeout=5000)
+
+    # Start checkout
+    checkout_btn = page.locator("#checkout-btn")
+    checkout_btn.click()
+    expect(checkout_btn).to_have_text("Confirmar Pedido", timeout=5000)
+
+    # Confirm order
+    checkout_btn.click()
+
+    # Wait for confirmation dialog and check message
+    page.wait_for_timeout(1000)
+    assert any("Order confirmed" in msg or "sucesso" in msg.lower() for msg in alerts)
+
+    # UI should have reset to an empty cart
+    expect(page.locator("#cart-items-container")).to_contain_text(
+        "Seu carrinho está vazio.", timeout=5000
+    )
+    expect(page.locator("#cart-total")).to_have_text("R$ 0,00")
+    expect(checkout_btn).to_be_disabled()
+
+
+def test_e2e_apply_invalid_coupon_shows_alert(page: Page):
+    """
+    Tests applying an invalid coupon code in the UI shows an alert dialog
+    and leaves totals unchanged without discount.
+    """
+    alerts = []
+    page.on("dialog", lambda dialog: (alerts.append(dialog.message), dialog.accept()))
+
+    page.goto("http://frontend")
+    expect(page.locator("h1")).to_have_text("Produtos")
+    expect(page.locator("#loading-indicator")).to_be_hidden(timeout=10000)
+
+    laptop_product = get_product_by_name(page, "Laptop Moderno")
+    laptop_product.locator(".add-to-cart-btn").click()
+    expect(get_cart_item_by_name(page, "Laptop Moderno")).to_be_visible(timeout=5000)
+
+    # Try applying nonexistent coupon
+    page.locator("#coupon-code").fill("CUPOM_FALSO_123")
+    page.locator("#apply-coupon-btn").click()
+
+    page.wait_for_timeout(1000)
+    assert len(alerts) >= 1
+    assert (
+        "Coupon does not exist" in alerts[0]
+        or "inválido" in alerts[0].lower()
+        or "não encontrado" in alerts[0].lower()
+    )
+    expect(page.locator("#applied-coupon-info")).to_be_hidden()
+    expect(page.locator("#cart-total")).to_have_text("R$ 4.500,00")
+
+
+def test_e2e_remove_all_items_clears_coupon_and_resets_ui(page: Page):
+    """
+    Tests RF-004 on the UI:
+    Removing all items from the cart resets UI, removes applied coupon and disables checkout.
+    """
+    page.goto("http://frontend")
+    expect(page.locator("h1")).to_have_text("Produtos")
+    expect(page.locator("#loading-indicator")).to_be_hidden(timeout=10000)
+
+    laptop_product = get_product_by_name(page, "Laptop Moderno")
+    laptop_product.locator(".add-to-cart-btn").click()
+    expect(get_cart_item_by_name(page, "Laptop Moderno")).to_be_visible(timeout=5000)
+
+    page.locator("#coupon-code").fill("SALE10")
+    page.locator("#apply-coupon-btn").click()
+    expect(page.locator("#applied-coupon-info")).to_be_visible(timeout=5000)
+
+    # Remove the only item in the cart
+    cart_item = get_cart_item_by_name(page, "Laptop Moderno")
+    cart_item.locator(".remove-item-btn").click()
+
+    expect(cart_item).not_to_be_visible(timeout=5000)
+    expect(page.locator("#cart-items-container")).to_contain_text(
+        "Seu carrinho está vazio."
+    )
+    expect(page.locator("#applied-coupon-info")).to_be_hidden()
+    expect(page.locator("#coupon-form")).to_be_visible()
+    expect(page.locator("#checkout-btn")).to_be_disabled()

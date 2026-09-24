@@ -383,3 +383,112 @@ def test_new_cart_created_after_previous_order_completed(
     updated_cart = cart_service.add_item(user_id, str(sample_product.id), 1)
     assert updated_cart.status == CartStatusEnum.WITH_ITEMS
     assert len(updated_cart.items) == 1
+
+
+def test_integration_cart_abandonment_flow(
+    cart_service: CartService, sample_product: Product
+):
+    """RF-011: Cart can be transitioned to ABANDONED from any active state and is terminal."""
+    # 1. Abandon from EMPTY
+    user_empty = "usr_abandon_empty"
+    cart_empty = cart_service.abandon_cart(user_empty)
+    assert cart_empty.status == CartStatusEnum.ABANDONED
+
+    # Terminal check: Cannot mutate abandoned cart
+    with pytest.raises(InvalidTransitionError):
+        cart_service.add_item(user_empty, str(sample_product.id), 1)
+
+    # 2. Abandon from WITH_ITEMS
+    user_items = "usr_abandon_items"
+    cart_service.add_item(user_items, str(sample_product.id), 1)
+    cart_items = cart_service.abandon_cart(user_items)
+    assert cart_items.status == CartStatusEnum.ABANDONED
+
+    # 3. Abandon from IN_CHECKOUT
+    user_checkout = "usr_abandon_checkout"
+    cart_service.add_item(user_checkout, str(sample_product.id), 1)
+    cart_service.start_checkout(user_checkout)
+    cart_checkout = cart_service.abandon_cart(user_checkout)
+    assert cart_checkout.status == CartStatusEnum.ABANDONED
+
+
+def test_integration_coupon_replacement(
+    cart_service: CartService, db_session: Session, sample_product: Product
+):
+    """RN-001: Successive coupon applications replace the previous coupon."""
+    user_id = "usr_coupon_replace"
+    c1 = Coupon(
+        code="PRIMEIRO10",
+        discount_type=CouponDiscountType.PERCENTAGE,
+        value=10.0,
+        expires_at=utc_now() + timedelta(days=10),
+    )
+    c2 = Coupon(
+        code="SEGUNDO20",
+        discount_type=CouponDiscountType.PERCENTAGE,
+        value=20.0,
+        expires_at=utc_now() + timedelta(days=10),
+    )
+    db_session.add_all([c1, c2])
+    db_session.commit()
+
+    cart_service.add_item(user_id, str(sample_product.id), 1)
+    cart = cart_service.apply_coupon(user_id, "PRIMEIRO10")
+    assert cart.coupon_id == c1.id
+
+    # Applying c2 replaces c1
+    cart = cart_service.apply_coupon(user_id, "SEGUNDO20")
+    assert cart.coupon_id == c2.id
+
+
+def test_integration_fixed_coupon_exceeding_subtotal_persists_correctly(
+    cart_service: CartService, db_session: Session
+):
+    """RN-004: Fixed coupon exceeding subtotal is persisted and verified."""
+    user_id = "usr_fixed_floor_zero"
+    cheap_product = Product(
+        name="Cabo USB-C", description="Cabo 1m", price=30.00, stock=10
+    )
+    big_coupon = Coupon(
+        code="FIXO50",
+        discount_type=CouponDiscountType.FIXED_VALUE,
+        value=50.0,
+        expires_at=utc_now() + timedelta(days=10),
+    )
+    db_session.add_all([cheap_product, big_coupon])
+    db_session.commit()
+
+    cart_service.add_item(user_id, str(cheap_product.id), 1)
+    cart = cart_service.apply_coupon(user_id, "FIXO50")
+
+    assert cart.coupon_id == big_coupon.id
+    from app.schemas.cart import CartRead
+
+    cart_read = CartRead.model_validate(cart)
+    assert cart_read.subtotal == 30.00
+    assert cart_read.discount == 30.00
+    assert cart_read.total == 0.00
+
+
+def test_integration_confirm_order_deadlock_prevention_ordering(
+    cart_service: CartService, db_session: Session
+):
+    """RN-006 / RN-007: Confirm order locks and decrements products in ascending product_id order."""
+    user_id = "usr_deadlock_test"
+    p1 = Product(id=10, name="Item 10", price=100.0, stock=5)
+    p2 = Product(id=20, name="Item 20", price=200.0, stock=5)
+    db_session.add_all([p1, p2])
+    db_session.commit()
+
+    # Add items in reverse order (20 first, then 10)
+    cart_service.add_item(user_id, "20", 2)
+    cart_service.add_item(user_id, "10", 1)
+    cart_service.start_checkout(user_id)
+
+    confirmed_cart = cart_service.confirm_order(user_id)
+    assert confirmed_cart.status == CartStatusEnum.ORDER_CREATED
+
+    db_session.refresh(p1)
+    db_session.refresh(p2)
+    assert p1.stock == 4
+    assert p2.stock == 3

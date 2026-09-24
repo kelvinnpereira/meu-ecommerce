@@ -603,3 +603,175 @@ def test_user_can_create_new_cart_after_confirming_order(
     assert add_resp.status_code == 200
     assert add_resp.json()["status"] == "WITH_ITEMS"
     assert len(add_resp.json()["items"]) == 1
+
+
+def test_endpoint_add_item_invalid_payload_validation_422(
+    client: TestClient,
+    product_in_stock: Product,
+):
+    """Validation: Submitting quantity <= 0 returns HTTP 422 Unprocessable Entity."""
+    # Negative quantity
+    resp1 = client.post(
+        "/api/v1/cart/items",
+        headers=HEADERS,
+        json={"product_id": str(product_in_stock.id), "quantity": -2},
+    )
+    assert resp1.status_code == 422
+
+    # Zero quantity
+    resp2 = client.post(
+        "/api/v1/cart/items",
+        headers=HEADERS,
+        json={"product_id": str(product_in_stock.id), "quantity": 0},
+    )
+    assert resp2.status_code == 422
+
+
+def test_endpoint_apply_coupon_with_whitespace_and_casing_success(
+    client: TestClient,
+    product_in_stock: Product,
+    valid_percentage_coupon: Coupon,
+):
+    """RN-003: Applying coupon with leading/trailing spaces and lowercase succeeds."""
+    client.post(
+        "/api/v1/cart/items",
+        headers=HEADERS,
+        json={"product_id": str(product_in_stock.id), "quantity": 1},
+    )
+
+    resp = client.post(
+        "/api/v1/cart/coupon",
+        headers=HEADERS,
+        json={"coupon_code": f"  {valid_percentage_coupon.code.lower()}  "},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["coupon"] is not None
+    assert data["coupon"]["code"] == valid_percentage_coupon.code
+
+
+def test_endpoint_apply_fixed_coupon_higher_than_subtotal_floor_zero(
+    client: TestClient,
+    product_in_stock: Product,
+    db_session: Session,
+):
+    """RN-004: Fixed coupon exceeding subtotal floors the total at 0.00."""
+    # product price is 10.00
+    client.post(
+        "/api/v1/cart/items",
+        headers=HEADERS,
+        json={"product_id": str(product_in_stock.id), "quantity": 1},
+    )
+    mega_coupon = Coupon(
+        code="MEGA100",
+        discount_type=CouponDiscountType.FIXED_VALUE,
+        value=100.0,
+        expires_at=utc_now() + timedelta(days=10),
+    )
+    db_session.add(mega_coupon)
+    db_session.commit()
+
+    resp = client.post(
+        "/api/v1/cart/coupon",
+        headers=HEADERS,
+        json={"coupon_code": "MEGA100"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert Decimal(str(data["subtotal"])) == Decimal("10.00")
+    assert Decimal(str(data["discount"])) == Decimal("10.00")
+    assert Decimal(str(data["total"])) == Decimal("0.00")
+
+
+def test_endpoint_checkout_state_mutation_guards_return_409(
+    client: TestClient,
+    product_in_stock: Product,
+    second_product: Product,
+):
+    """Guard: Modifying items while in IN_CHECKOUT returns HTTP 409 Conflict."""
+    client.post(
+        "/api/v1/cart/items",
+        headers=HEADERS,
+        json={"product_id": str(product_in_stock.id), "quantity": 1},
+    )
+    client.post("/api/v1/cart/checkout", headers=HEADERS)
+
+    # 1. Add item
+    add_resp = client.post(
+        "/api/v1/cart/items",
+        headers=HEADERS,
+        json={"product_id": str(second_product.id), "quantity": 1},
+    )
+    assert add_resp.status_code == 409
+
+    # 2. Update item
+    update_resp = client.put(
+        f"/api/v1/cart/items/{product_in_stock.id}",
+        headers=HEADERS,
+        json={"quantity": 3},
+    )
+    assert update_resp.status_code == 409
+
+    # 3. Delete item
+    del_resp = client.delete(
+        f"/api/v1/cart/items/{product_in_stock.id}",
+        headers=HEADERS,
+    )
+    assert del_resp.status_code == 409
+
+
+def test_endpoint_return_to_cart_when_not_in_checkout_returns_409(
+    client: TestClient,
+    product_in_stock: Product,
+):
+    """RF-009 Guard: DELETE /api/v1/cart/checkout when not IN_CHECKOUT returns 409."""
+    # From EMPTY
+    resp1 = client.delete("/api/v1/cart/checkout", headers=HEADERS)
+    assert resp1.status_code == 409
+
+    # From WITH_ITEMS
+    client.post(
+        "/api/v1/cart/items",
+        headers=HEADERS,
+        json={"product_id": str(product_in_stock.id), "quantity": 1},
+    )
+    resp2 = client.delete("/api/v1/cart/checkout", headers=HEADERS)
+    assert resp2.status_code == 409
+
+
+def test_endpoint_confirm_order_rolls_back_coupon_and_stock_on_failure(
+    client: TestClient,
+    product_in_stock: Product,
+    valid_percentage_coupon: Coupon,
+    db_session: Session,
+):
+    """RN-007 / RN-002: Coupon usage is NOT persisted if confirm fails due to stock conflict."""
+    client.post(
+        "/api/v1/cart/items",
+        headers=HEADERS,
+        json={"product_id": str(product_in_stock.id), "quantity": 5},
+    )
+    client.post(
+        "/api/v1/cart/coupon",
+        headers=HEADERS,
+        json={"coupon_code": valid_percentage_coupon.code},
+    )
+    client.post("/api/v1/cart/checkout", headers=HEADERS)
+
+    # Concurrently reduce stock to 0
+    product_in_stock.stock = 0
+    db_session.commit()
+
+    resp = client.post("/api/v1/cart/confirm", headers=HEADERS)
+    assert resp.status_code == 422
+
+    # Verify coupon was NOT marked as used in UserCouponUsage table
+    usage = (
+        db_session.query(UserCouponUsage)
+        .filter(
+            UserCouponUsage.user_id == USER_ID,
+            UserCouponUsage.coupon_id == valid_percentage_coupon.id,
+        )
+        .first()
+    )
+    assert usage is None

@@ -103,8 +103,8 @@ class CartService:
 
         cart = self.get_or_create_cart(user_id)
 
-        # It is forbidden to add items to a cart that has already been converted to an order
-        if cart.status in [CartStatusEnum.ORDER_CREATED]:
+        # It is forbidden to add items to a cart that has already been converted to an order or is in checkout
+        if cart.status in [CartStatusEnum.ORDER_CREATED, CartStatusEnum.IN_CHECKOUT]:
             raise InvalidTransitionError(cart.status, cart.status)
 
         try:
