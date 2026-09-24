@@ -122,8 +122,6 @@ dmypy.json
 cython_debug/
 
 # Docker
-.dockerignore
-docker-compose.yml
 nginx.conf
 
 # Logs e dados
