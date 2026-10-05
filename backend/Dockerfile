@@ -2,6 +2,7 @@ FROM mcr.microsoft.com/playwright/python:v1.40.0-focal
 
 # Create and switch to a new non-root user
 RUN useradd -m appuser
+RUN mkdir -p /data && chown -R appuser:appuser /data
 USER appuser
 
 WORKDIR /home/appuser/app

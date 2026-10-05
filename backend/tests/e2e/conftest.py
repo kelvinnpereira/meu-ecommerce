@@ -1,11 +1,20 @@
+import os
 import sqlite3
 
 import pytest
 
 
+def get_e2e_db_path() -> str:
+    if os.getenv("E2E_DATABASE_PATH"):
+        return os.environ["E2E_DATABASE_PATH"]
+    if os.path.exists("/data/ecommerce.db") or os.path.exists("/data"):
+        return "/data/ecommerce.db"
+    return "ecommerce.db"
+
+
 @pytest.fixture(autouse=True)
 def prepare_e2e_db():
-    conn = sqlite3.connect("ecommerce.db")
+    conn = sqlite3.connect(get_e2e_db_path())
     cursor = conn.cursor()
     # Ensure Mouse price is 150.00 for e2e tests
     cursor.execute(
@@ -53,7 +62,7 @@ def prepare_e2e_db():
     conn.close()
     yield
     # Cleanup cart and coupon usages after test
-    conn = sqlite3.connect("ecommerce.db")
+    conn = sqlite3.connect(get_e2e_db_path())
     cursor = conn.cursor()
     cursor.execute(
         f"DELETE FROM cart_items WHERE cart_id IN (SELECT id FROM carts WHERE user_id IN ({placeholders}))",

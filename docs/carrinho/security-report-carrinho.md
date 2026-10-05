@@ -2,9 +2,9 @@
 
 ## Resumo
 - **Total de findings**: 7 (1 Crítico, 2 Altos, 3 Médios, 1 Baixo)
-- **Corrigidos nesta sessão**: 7
-- **Pendentes**: 0 (com recomendações de roadmap de autenticação registradas)
-- **Status dos testes**: 108/108 testes aprovados (incluindo 9 novos testes focados em segurança)
+- **Corrigidos nesta sessão**: 6 (SEC-02, SEC-03, SEC-04, SEC-05, SEC-06, SEC-07)
+- **Pendentes / Aceitos por Escopo**: 1 (SEC-01 — Crítico: controle de acesso e IDOR/BOLA via `X-User-ID`, aceito por delimitação de escopo com mitigação parcial de formato)
+- **Status dos testes**: 124/124 testes aprovados (incluindo testes de segurança, unitários, integração e E2E)
 
 ---
 
@@ -13,12 +13,21 @@
 ### 1. [CRÍTICO] SEC-01: Controle de Acesso Quebrado e Risco de IDOR/BOLA via `X-User-ID`
 - **Categoria OWASP**: A01:2021 – Broken Access Control (CWE-639 / CWE-284)
 - **Localização**: `backend/app/api/deps.py:22-31`
-- **Vetor de ataque**: Qualquer cliente pode alterar arbitrariamente o cabeçalho `X-User-ID` para o ID de outro usuário sem qualquer verificação de assinatura ou token, permitindo visualização, mutação e fechamento indevido de carrinhos alheios. Adicionalmente, strings de comprimento arbitrário ou caracteres especiais podiam ser injetados.
-- **Status**: Corrigido (Mitigação imediata aplicada no escopo da camada de transporte e validação de schema)
-- **Correção aplicada**:
-  - Implementada validação e higienização rigorosa em `deps.get_user_id`: sanitização de espaços em branco, restrição de tamanho máximo de 64 caracteres e validação via regex (`^[a-zA-Z0-9_\-]{1,64}$`).
-  - Tratamento para rejeitar `X-User-ID` malformado com HTTP 400.
-  - *Recomendação arquitetural futura*: Para ambiente de produção comercial, substituir o cabeçalho customizado por autenticação robusta (JWT/OAuth2 com verificação de assinatura assimétrica).
+- **Status**: **Pendente / Aceito por Escopo** (Risco aceito por delimitação do escopo do projeto; mitigação parcial de sanitização/formato de entrada aplicada)
+- **Vetor de ataque que continua aberto**:
+  - A validação introduzida no cabeçalho `X-User-ID` confere exclusivamente a sintaxe e o formato do valor recebido (restringindo a até 64 caracteres alfanuméricos, hífen ou underline via regex `^[a-zA-Z0-9_\-]{1,64}$`, além de rejeitar strings vazias/espaços com HTTP 400).
+  - **O vetor de usurpação de identidade continua totalmente aberto**: qualquer cliente ou atacante pode inspecionar, mutar, esvaziar, aplicar cupons ou finalizar o pedido no carrinho de compras de qualquer outro usuário simplesmente alterando o valor do cabeçalho `X-User-ID` na requisição (por exemplo, alternando de `user-1` para `user-2`).
+  - Não há verificação criptográfica de identidade, assinatura digital, token de sessão ou mecanismo de autenticação/autorização no backend que vincule a requisição à real identidade do emissor.
+- **Justificativa do Aceite de Risco por Escopo**:
+  - Mecanismos de autenticação e gestão de identidade de usuários (como JWT, OAuth2, sessões seguras com cookies ou OIDC) foram deliberadamente definidos como fora do escopo deste exercício.
+  - Para manter a fidelidade técnica irrestrita do relatório de segurança, a vulnerabilidade não é dada como resolvida, mas sim reclassificada como **Pendente** e formalmente **Aceita por Escopo**.
+- **Mitigação Parcial Aplicada (Camada de Entrada/Sintaxe)**:
+  - Sanitização de espaços em branco e validação estrita de formato em `deps.get_user_id`.
+  - Rejeição de strings vazias, caracteres especiais fora do padrão e identificadores com mais de 64 caracteres com HTTP 400 (mitigando injeções pontuais e overflow na camada de transporte).
+- **Recomendação de Autenticação (Obrigatória para Produção)**:
+  - Eliminar a confiança cega no cabeçalho HTTP não autenticado `X-User-ID`.
+  - Adotar autenticação robusta padrão de mercado (ex.: OAuth 2.0 / OpenID Connect com tokens JWT assinados assimetricamente ou sessões com cookies `HttpOnly`/`Secure`).
+  - O identificador do usuário (`user_id` / `sub`) deve ser extraído e validado no servidor exclusivamente a partir das credenciais criptografadas verificadas, impedindo completamente o vetor de IDOR/BOLA.
 
 ---
 
@@ -107,5 +116,7 @@ Arquivo criado: `backend/tests/integration/test_security.py`
 ---
 
 ## Recomendações Pendentes e Próximos Passos (Roadmap)
-- **Autenticação Centralizada**: Substituir o uso de `X-User-ID` por tokens JWT padrão OAuth2/OIDC emitidos por um provedor de identidade seguro com verificação de assinatura criptográfica.
+- **Autenticação Centralizada (SEC-01 — PENDENTE / ACEITO POR ESCOPO)**:
+  - **Vetor aberto**: Usurpação direta de identidade e manipulação de carrinhos de terceiros (IDOR/BOLA) via alteração manual do cabeçalho `X-User-ID`.
+  - **Recomendação**: Implementar autenticação baseada em tokens assinados (OAuth2 / OIDC com JWT) ou sessões gerenciadas pelo servidor. O backend deve derivar a identidade do usuário a partir do token verificado, eliminando o cabeçalho não autenticado `X-User-ID`.
 - **Rate Limiting**: Implementar limitação de taxa (ex: `slowapi` ou Redis token bucket) nas rotas de aplicação de cupom (`/cart/coupon`) e confirmação (`/cart/confirm`) para mitigar tentativas de força bruta e DoS.
