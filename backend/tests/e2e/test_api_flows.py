@@ -1,3 +1,4 @@
+import os
 import sqlite3
 
 import requests
@@ -5,8 +6,16 @@ import requests
 BASE_URL = "http://localhost:8000/api/v1"
 
 
+def get_e2e_db_path() -> str:
+    if os.getenv("E2E_DATABASE_PATH"):
+        return os.environ["E2E_DATABASE_PATH"]
+    if os.path.exists("/data/ecommerce.db") or os.path.exists("/data"):
+        return "/data/ecommerce.db"
+    return "ecommerce.db"
+
+
 def get_db():
-    conn = sqlite3.connect("ecommerce.db")
+    conn = sqlite3.connect(get_e2e_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 

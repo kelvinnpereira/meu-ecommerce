@@ -838,11 +838,15 @@ def seed_volumetric_data(
 
                     if random.random() < has_coupon_chance:
                         chosen_coupon = random.choice(active_coupons)
-                        # Check usage limits if ORDER_CREATED
+                        # Check usage limits if ORDER_CREATED (DB enforces UniqueConstraint on user_id, coupon_id)
                         current_uses = user_coupon_usages_map.get(
                             (user_id, chosen_coupon.id), 0
                         )
-                        if current_uses < chosen_coupon.max_uses_per_user:
+                        if status == CartStatusEnum.ORDER_CREATED:
+                            if current_uses == 0:
+                                coupon_id = chosen_coupon.id
+                                user_coupon_usages_map[(user_id, chosen_coupon.id)] = 1
+                        else:
                             coupon_id = chosen_coupon.id
 
                 # Realistic timestamps over the last 90 days

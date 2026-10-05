@@ -1,7 +1,17 @@
+import os
 import re
 import sqlite3
 
 from playwright.sync_api import Page, expect
+
+
+def get_e2e_db_path() -> str:
+    if os.getenv("E2E_DATABASE_PATH"):
+        return os.environ["E2E_DATABASE_PATH"]
+    if os.path.exists("/data/ecommerce.db") or os.path.exists("/data"):
+        return "/data/ecommerce.db"
+    return "ecommerce.db"
+
 
 # Define locators for easier access and maintenance
 PRODUCTS = "#products-container"
@@ -318,7 +328,7 @@ def test_e2e_ui_full_purchase_verifies_db_persistence(page: Page):
     expect(checkout_btn).to_be_disabled()
 
     # Validação direta no banco de dados SQLite
-    conn = sqlite3.connect("ecommerce.db")
+    conn = sqlite3.connect(get_e2e_db_path())
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -399,7 +409,7 @@ def test_e2e_ui_checkout_edit_return_and_completion(page: Page):
     assert any("sucesso" in msg.lower() or "confirmed" in msg.lower() for msg in alerts)
 
     # Validação no banco SQLite
-    conn = sqlite3.connect("ecommerce.db")
+    conn = sqlite3.connect(get_e2e_db_path())
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -448,7 +458,7 @@ def test_e2e_ui_stock_conflict_rollback_and_recovery(page: Page):
     expect(checkout_btn).to_have_text("Confirmar Pedido", timeout=5000)
 
     # Ação concorrente: reduzir estoque de Laptop no banco diretamente para 1 unidade
-    conn = sqlite3.connect("ecommerce.db")
+    conn = sqlite3.connect(get_e2e_db_path())
     cursor = conn.cursor()
     cursor.execute("UPDATE products SET stock = 1 WHERE name = 'Laptop Moderno'")
     conn.commit()
@@ -463,7 +473,7 @@ def test_e2e_ui_stock_conflict_rollback_and_recovery(page: Page):
     assert any("stock" in msg.lower() or "estoque" in msg.lower() for msg in alerts)
 
     # Validação do Rollback Atômico no banco de dados
-    conn = sqlite3.connect("ecommerce.db")
+    conn = sqlite3.connect(get_e2e_db_path())
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT stock FROM products WHERE name = 'Laptop Moderno'")
@@ -491,7 +501,7 @@ def test_e2e_ui_stock_conflict_rollback_and_recovery(page: Page):
     page.wait_for_timeout(1000)
 
     # Validação final no banco
-    conn = sqlite3.connect("ecommerce.db")
+    conn = sqlite3.connect(get_e2e_db_path())
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT stock FROM products WHERE name = 'Laptop Moderno'")
